@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: '1000:1000' # Usar el mismo UID/GID que tu usuario local
+    environment:
+      # Usar host.docker.internal para acceder a los servicios en el host
+      DATABASE_URL: 'postgresql://multistore_user:multistore_pass_123@host.docker.internal:5433/multistore'
+      REDIS_URL: 'redis://host.docker.internal:6379'
+      RABBITMQ_URL: 'amqp://rabbitmq:rabbitmq123@host.docker.internal:5672/multistore'
+      PORT: 3000
+      NODE_ENV: development
+      # Variables adicionales útiles para desarrollo
+      LOG_LEVEL: debug
+    ports:
+      - '3000:3000'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Volume mount para desarrollo en tiempo real
+      - .:/app
+      # Excluir node_modules del host para evitar conflictos
+      - /app/node_modules
+      # Excluir la carpeta de prisma generada para evitar conflictos
+      - /app/node_modules/.prisma
+    command: npm run start:dev
+    # Reiniciar automáticamente si falla
+    restart: unless-stopped
+    # Desarrollo: mantener el contenedor corriendo incluso si el proceso principal falla
+    stdin_open: true
+    tty: true
+    # Usar la red del host para acceder a los servicios
+    network_mode: "host"

@@ -1,0 +1,233 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model auth_account {
+  account_id    String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_type     String
+  user_ref      String  @db.Uuid
+  provider      String? @default("local")
+  provider_sub  String?
+  email         String
+  password_hash String
+
+  @@index([email], map: "idx_auth_account_email")
+  @@index([user_ref, user_type], map: "idx_auth_account_user_ref")
+}
+
+model business {
+  business_id   String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String  @db.Uuid
+  legal_name    String
+  cuit          String?
+  contact_name  String?
+  contact_phone String?
+  address       String?
+  logo_url      String?
+  tenants       tenant  @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model mp_config {
+  mp_config_id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id            String    @db.Uuid
+  mp_user_id           String?
+  mp_access_token_enc  String?
+  mp_refresh_token_enc String?
+  mp_token_expiry      DateTime? @db.Timestamptz(6)
+  created_at           DateTime? @default(now()) @db.Timestamptz(6)
+  tenants              tenant    @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_business {
+  user_id     String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String        @db.Uuid
+  email       String        @unique
+  name        String
+  status      String?       @default("active")
+  created_at  DateTime?     @default(now()) @db.Timestamptz(6)
+  session_app session_app[]
+  tenants     tenant        @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
+  user_role   user_role[]
+
+  @@index([email], map: "idx_user_business_email")
+  @@index([tenant_id], map: "idx_user_business_tenant")
+}
+
+model user_owner {
+  user_owner_id String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String        @db.Uuid
+  name          String
+  email         String        @unique
+  phone         String?
+  active        Boolean?      @default(true)
+  session_app   session_app[]
+  tenants       tenant        @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([email], map: "idx_user_owner_email")
+  @@index([tenant_id], map: "idx_user_owner_tenant")
+}
+
+model category {
+  category_id String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String    @db.Uuid
+  name        String
+  description String?
+  active      Boolean?  @default(true)
+  tenant      tenant    @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "categories_tenant_id_fkey")
+  product     product[]
+}
+
+model order {
+  order_id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id            String       @db.Uuid
+  customer_id          String?      @db.Uuid
+  source_channel       String?
+  status               String?      @default("draft")
+  total_amount         Decimal?     @default(0) @db.Decimal(12, 2)
+  currency             String?      @default("ARS")
+  cart_json            Json?
+  mp_preference_id     String?
+  mp_merchant_order_id String?
+  created_at           DateTime?    @default(now()) @db.Timestamptz(6)
+  tenant               tenant       @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "orders_tenant_id_fkey")
+  order_item           order_item[]
+  payment              payment[]
+
+  @@index([status], map: "idx_orders_status")
+  @@index([tenant_id], map: "idx_orders_tenant")
+}
+
+model order_item {
+  order_item_id   String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id        String           @db.Uuid
+  product_id      String           @db.Uuid
+  variant_id      String?          @db.Uuid
+  quantity        Int
+  unit_price      Decimal          @db.Decimal(12, 2)
+  discount        Decimal?         @default(0) @db.Decimal(12, 2)
+  order           order            @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction, map: "order_items_order_id_fkey")
+  product         product          @relation(fields: [product_id], references: [product_id], onDelete: Cascade, onUpdate: NoAction, map: "order_items_product_id_fkey")
+  product_variant product_variant? @relation(fields: [variant_id], references: [variant_id], onUpdate: NoAction, map: "order_items_variant_id_fkey")
+}
+
+model payment {
+  payment_id    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String    @db.Uuid
+  order_id      String    @db.Uuid
+  mp_payment_id String?
+  status        String?
+  method        String?
+  amount        Decimal?  @db.Decimal(12, 2)
+  currency      String?
+  raw_json      Json?
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  order         order     @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction, map: "payments_order_id_fkey")
+  tenant        tenant    @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "payments_tenant_id_fkey")
+
+  @@index([mp_payment_id], map: "idx_payments_mp_payment")
+  @@index([order_id], map: "idx_payments_order")
+}
+
+model product {
+  product_id      String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id       String            @db.Uuid
+  category_id     String?           @db.Uuid
+  name            String
+  description     String?
+  price           Decimal           @db.Decimal(12, 2)
+  currency        String?           @default("ARS")
+  stock           Int?              @default(0)
+  image_url       String?
+  visible         Boolean?          @default(true)
+  created_at      DateTime?         @default(now()) @db.Timestamptz(6)
+  order_item      order_item[]
+  category        category?         @relation(fields: [category_id], references: [category_id], onUpdate: NoAction, map: "products_category_id_fkey")
+  tenant          tenant            @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "products_tenant_id_fkey")
+  product_variant product_variant[]
+
+  @@index([category_id], map: "idx_products_category")
+  @@index([tenant_id], map: "idx_products_tenant")
+  @@index([visible], map: "idx_products_visible")
+}
+
+model product_variant {
+  variant_id  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id  String       @db.Uuid
+  name        String
+  price_delta Decimal?     @default(0) @db.Decimal(12, 2)
+  sku         String?
+  stock       Int?         @default(0)
+  order_item  order_item[]
+  product     product      @relation(fields: [product_id], references: [product_id], onDelete: Cascade, onUpdate: NoAction, map: "product_variants_product_id_fkey")
+}
+
+model role {
+  role_id     String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  permission  Json?
+  active      Boolean?    @default(true)
+  user_role   user_role[]
+}
+
+model session_app {
+  session_id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_owner_id      String?        @db.Uuid
+  user_id            String?        @db.Uuid
+  tenant_id          String         @db.Uuid
+  provider           String?        @db.VarChar(50)
+  refresh_token_enc  String
+  refresh_expires_at DateTime       @db.Timestamptz(6)
+  created_at         DateTime       @default(now()) @db.Timestamptz(6)
+  last_used_at       DateTime?      @db.Timestamptz(6)
+  ip_address         String?        @db.VarChar(45)
+  user_agent         String?
+  tenant             tenant         @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tenant")
+  user_business      user_business? @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_business")
+  user_owner         user_owner?    @relation(fields: [user_owner_id], references: [user_owner_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_owner")
+
+  @@index([last_used_at], map: "idx_session_last_used")
+  @@index([refresh_expires_at], map: "idx_session_refresh_expires")
+  @@index([tenant_id], map: "idx_session_tenant")
+  @@index([user_id], map: "idx_session_user")
+  @@index([user_owner_id], map: "idx_session_user_owner")
+}
+
+model tenant {
+  tenant_id       String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String
+  slug            String          @unique
+  primary_color   String?
+  secondary_color String?
+  custom_domain   String?
+  currency        String?         @default("ARS")
+  plan_status     String?         @default("trial")
+  created_at      DateTime?       @default(now()) @db.Timestamptz(6)
+  business        business[]
+  category        category[]
+  mp_config       mp_config[]
+  order           order[]
+  payment         payment[]
+  product         product[]
+  session_app     session_app[]
+  user_business   user_business[]
+  user_owner      user_owner[]
+
+  @@index([slug], map: "idx_tenants_slug")
+}
+
+model user_role {
+  user_id       String        @db.Uuid
+  role_id       String        @db.Uuid
+  role          role          @relation(fields: [role_id], references: [role_id], onDelete: Cascade, onUpdate: NoAction, map: "user_roles_role_id_fkey")
+  user_business user_business @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "user_roles_user_id_fkey")
+
+  @@id([user_id, role_id])
+}

@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2023",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "noFallthroughCasesInSwitch": false,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "types": ["node", "jest", "supertest"],
+    "typeRoots": ["./node_modules/@types", "./node_modules/.prisma/client"],
+    "paths": {
+      "@src/*": ["src/*"],
+      "@types/*": ["src/types/*"],
+      "@constants/*": ["src/constants/*"],
+      "@modules/*": ["src/modules/*"],
+      "@utility/*": ["src/utility/*"],
+      "@messaging/*": ["src/messaging/*"],
+      "@prismaService/*": ["src/prisma/*"],
+      "@redis/*": ["src/redis/*"],
+      "@libs/*": ["src/libs/*"],
+      "@config/*": ["src/config/*"]
+    }
+  },
+  "exclude": ["node_modules"],
+  "include": ["src/**/*.ts"]
+}
