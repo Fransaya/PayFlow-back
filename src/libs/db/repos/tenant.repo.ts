@@ -1,5 +1,8 @@
 import { Prisma } from '@prisma/client';
 
+// Interfaces de tenant
+import { TenantUpdate } from '@src/types/tenant';
+
 export function tenantRepo(tx: Prisma.TransactionClient) {
   return {
     async tenantExist(slug: string): Promise<boolean> {
@@ -87,6 +90,34 @@ export function tenantRepo(tx: Prisma.TransactionClient) {
         total_products: productsCount,
         total_orders: ordersCount,
       };
+    },
+
+    async updateTenantInfo(body: TenantUpdate, tenantId: string) {
+      const updateData: TenantUpdate = {};
+
+      if (body.name) updateData.name = body.name.trim();
+      if (body.primary_color)
+        updateData.primary_color = body.primary_color.trim();
+      if (body.secondary_color)
+        updateData.secondary_color = body.secondary_color.trim();
+      if (body.custom_domain)
+        updateData.custom_domain = body.custom_domain.trim();
+      if (body.currency) updateData.currency = body.currency.trim();
+
+      return await tx.tenant.update({
+        where: { tenant_id: tenantId },
+        data: updateData,
+        select: {
+          tenant_id: true,
+          name: true,
+          slug: true,
+          primary_color: true,
+          secondary_color: true,
+          custom_domain: true,
+          plan_status: true,
+          created_at: true,
+        },
+      });
     },
   };
 }

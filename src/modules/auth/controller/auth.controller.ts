@@ -1,7 +1,6 @@
 import {
   Controller,
   Post,
-  Get,
   Body,
   HttpCode,
   HttpStatus,
@@ -58,7 +57,9 @@ export class AuthController {
   @Post('logout')
   @UseGuards(Auth0TokenGuard) // Guardia adicional de token interno de app.
   @HttpCode(HttpStatus.OK)
-  logout() {}
+  logout(@CurrentUser() user: IdTokenPayload) {
+    return this.authService.logoutApp(user);
+  }
 
   @Post('register-owner')
   @UseGuards(Auth0TokenGuard)
@@ -96,12 +97,10 @@ export class AuthController {
     return await this.authService.registerBusiness(body, queryParams, user);
   }
 
+  //TODO: pendiente de implementacion
   @Post('refresh')
   refresh() {}
 
   @Post('invite')
   invite() {}
-
-  @Get('me')
-  me() {}
 }

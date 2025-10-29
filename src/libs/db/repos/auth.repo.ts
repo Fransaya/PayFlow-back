@@ -5,7 +5,7 @@ export function authRepo(tx: Prisma.TransactionClient) {
   return {
     async createOwnerWithTransaction(
       tenant_data: { name: string; slug: string },
-      user_data: { name: string; email: string },
+      user_data: { name: string; email: string; phone: string },
       auth_data: {
         user_type: string;
         provider: string;
@@ -27,6 +27,7 @@ export function authRepo(tx: Prisma.TransactionClient) {
           tenant_id: tenant.tenant_id,
           name: user_data.name.trim(),
           email: user_data.email.toLowerCase().trim(),
+          phone: user_data.phone.trim(),
           active: true,
         },
       });

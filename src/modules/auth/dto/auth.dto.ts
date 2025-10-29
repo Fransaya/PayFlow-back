@@ -36,6 +36,9 @@ export class UserDto {
   @MaxLength(100, { message: 'Display name must not exceed 100 characters' })
   @Transform(({ value }) => value?.trim())
   display_name: string;
+
+  @IsNotEmpty({ message: 'El Telefono es obligatorio' })
+  phone: string;
 }
 
 export class RegisterOwnerDto {

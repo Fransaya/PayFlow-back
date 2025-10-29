@@ -8,3 +8,7 @@ export * from './repos/auth.repo';
 export * from './repos/session.repo';
 export * from './repos/tenant.repo';
 export * from './repos/user.repo';
+export * from './repos/business.repo';
+export * from './repos/category.repo';
+export * from './repos/product.repo';
+export * from './repos/productVariant.repo';

@@ -36,4 +36,8 @@ export function validateOwnerRegistrationData(body: RegisterOwnerDto): void {
       'Display name must be less than 100 characters',
     );
   }
+
+  if (!user?.phone?.trim()) {
+    throw new BadRequestException('El Telefono es obligatorio');
+  }
 }

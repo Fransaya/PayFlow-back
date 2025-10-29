@@ -13,6 +13,10 @@ import { UserService } from './modules/user/service/user.service';
 // import { UserService } from './modules/user/service/user.service';
 // import { UserService } from './modules/user/user/user.service';
 import authConfig from '@config/auth.config';
+import { TenantModule } from './modules/tenant/tenant.module';
+import { BusinessModule } from './modules/business/business.module';
+import { ProductVariantModule } from './modules/productVariant/productVariant.module';
+import { CategoryModule } from './modules/category/category.module';
 
 @Module({
   imports: [
@@ -20,6 +24,10 @@ import authConfig from '@config/auth.config';
     MessagingModule,
     AuthModule,
     DbModule,
+    TenantModule,
+    BusinessModule,
+    ProductVariantModule,
+    CategoryModule,
   ],
   controllers: [AppController],
   providers: [AppService, DbService, UserService],

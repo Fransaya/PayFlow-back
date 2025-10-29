@@ -210,7 +210,6 @@ export class AuthService {
     }
   }
 
-  // TODO: cambiar forma de consulta de session ! ver
   async getSession(session_id: string): Promise<SessionAppInternalDto | null> {
     try {
       return this.dbService.runInTransaction({}, async (tx) => {
@@ -420,7 +419,7 @@ export class AuthService {
     user_decode,
   }: {
     tenant: { name: string; slug: string };
-    user: { display_name: string };
+    user: { display_name: string; phone: string };
     user_decode: IdTokenPayload;
   }) {
     return this.dbService.runInTransaction({}, async (tx) => {
@@ -428,7 +427,11 @@ export class AuthService {
 
       return await repository.createOwnerWithTransaction(
         { name: tenant.name, slug: tenant.slug },
-        { name: user.display_name, email: user_decode.email },
+        {
+          name: user.display_name,
+          email: user_decode.email,
+          phone: user.phone,
+        },
         {
           user_type: USER_TYPE.OWNER,
           provider: PROVIDER.AUTH0,

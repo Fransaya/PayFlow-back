@@ -8,11 +8,28 @@ import {
 
 import { DbService, tenantRepo } from '@libs/db';
 
+// Tipos para tenant
+import { TenantUpdate } from '@src/types/tenant';
+
 @Injectable()
 export class TenantService {
   private readonly logger = new Logger(TenantService.name);
 
   constructor(private readonly dbService: DbService) {}
+
+  async getTenantInfo(tenantId: string) {
+    try {
+      const response = await this.dbService.runInTransaction({}, async (tx) => {
+        const repo = tenantRepo(tx);
+        return repo.getTenantById(tenantId);
+      });
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error getting tenant info: ${error}`);
+      throw new InternalServerErrorException('Error getting tenant info');
+    }
+  }
 
   async validateTenantDoesNotExist(slug: string): Promise<void> {
     try {
@@ -51,6 +68,21 @@ export class TenantService {
 
       this.logger.error(`Error validating tenant existence: ${error}`);
       throw new InternalServerErrorException('Error validating tenant');
+    }
+  }
+
+  // Actualizar información del tenant
+  async updateTenantInfo(body: TenantUpdate, tenantId: string): Promise<any> {
+    try {
+      const response = await this.dbService.runInTransaction({}, async (tx) => {
+        const repo = tenantRepo(tx);
+        return repo.updateTenantInfo(body, tenantId);
+      });
+
+      return response;
+    } catch (error: any) {
+      this.logger.error(`Error updating tenant info: ${error}`);
+      throw new InternalServerErrorException('Error updating tenant info');
     }
   }
 }

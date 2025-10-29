@@ -37,6 +37,11 @@ export class UserDoc implements Omit<UserDto, 'display_name'> {
     maxLength: 100,
   })
   display_name: string;
+  @ApiProperty({
+    description: 'User phone number',
+    example: '+1 123-456-7890',
+  })
+  phone: string;
 }
 
 // ----- Register Owner -----
