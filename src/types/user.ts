@@ -55,3 +55,50 @@ export type GetUserByEmailResponse =
   | UserWithBusinessDetails
   | AuthAccountBase
   | null;
+
+// =================== TIPOS PARA AUTH CALLBACK ===================
+
+// Información básica del usuario de Google
+export interface GoogleUserInfo {
+  email: string;
+  name?: string;
+  picture?: string;
+}
+
+// Sesión de la aplicación interna
+export interface AppSessionData {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number | string;
+  session: any;
+}
+
+// Respuesta del callback de autenticación
+export interface AuthCallbackResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+  id_token: string;
+  user: GoogleUserInfo;
+  action: 'LOGIN' | 'REGISTER';
+  user_exists: boolean;
+  message: string;
+  redirect_to: '/dashboard' | '/register';
+  app_session?: AppSessionData;
+}
+
+// Respuesta de sincronización de cuenta
+export interface SyncAccountResponse {
+  description: string;
+  data: {
+    existUser: boolean;
+    action: 'LOGIN' | 'REGISTER';
+  };
+}
+
+// Respuesta de login de la aplicación
+export interface LoginAppResponse {
+  description: string;
+  data: AppSessionData;
+}

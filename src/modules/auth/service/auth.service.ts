@@ -7,6 +7,10 @@ import {
   Logger,
 } from '@nestjs/common';
 
+import crypto from 'crypto';
+import axios from 'axios';
+import { URLSearchParams } from 'url';
+
 import { USER_TYPE, PROVIDER } from '@src/constants/app.contants';
 
 // DB_LIBS
@@ -25,7 +29,12 @@ import { UpdateSessionAppDto, SessionAppInternalDto } from '../dto/session.dto';
 
 // Tipos de session
 import { SessionAppCreate } from '@src/types/sesssionApp';
-import { GetUserByEmailResponse } from '@src/types/user';
+import {
+  GetUserByEmailResponse,
+  AuthCallbackResponse,
+  SyncAccountResponse,
+  LoginAppResponse,
+} from '@src/types/user';
 
 import { IdTokenPayload } from '@src/types/idTokenPayload';
 import { InviteToken } from '@src/types/inviteToken';
@@ -53,25 +62,153 @@ export class AuthService {
     private readonly tenantService: TenantService,
   ) {}
 
+  /**
+   * Función auxiliar: Genera código aleatorio
+   */
+  generateRandomString(length: number) {
+    return crypto.randomBytes(length).toString('base64url');
+  }
+
+  /**
+   * Función auxiliar: Genera code challenge para PKCE
+   */
+  generateCodeChallenge(verifier: string) {
+    return crypto.createHash('sha256').update(verifier).digest('base64url');
+  }
+
+  // =================== METODO DE OBTENCION URL LOGIN ===================
+
+  getLoginUrl() {
+    try {
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const redirectUri =
+        process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5173/sync';
+
+      const scope = ['openid', 'profile', 'email'].join(' ');
+
+      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      authUrl.searchParams.set('client_id', clientId!);
+      authUrl.searchParams.set('redirect_uri', redirectUri);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('scope', scope);
+      authUrl.searchParams.set('access_type', 'offline');
+      authUrl.searchParams.set('prompt', 'consent');
+      authUrl.searchParams.set(
+        'state',
+        Math.random().toString(36).substring(7),
+      );
+
+      return { loginUrl: authUrl.toString() };
+    } catch (error) {
+      this.logger.error(`Failed to get login URL: ${error}`);
+      throw new InternalServerErrorException(
+        'An error occurred while generating the login URL',
+      );
+    }
+  }
+
+  async handleAuthCallback(code: string): Promise<AuthCallbackResponse> {
+    try {
+      // 1. Intercambiar código por tokens con Google
+      const tokenResponse: any = await axios.post(
+        'https://oauth2.googleapis.com/token',
+        {
+          code,
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET,
+          redirect_uri: `${process.env.FRONTEND_URL}/sync`,
+          grant_type: 'authorization_code',
+        },
+      );
+
+      const { access_token, refresh_token, expires_in, id_token } =
+        tokenResponse.data;
+
+      // 2. Obtener información del usuario desde Google
+      const userResponse: any = await axios.get(
+        'https://www.googleapis.com/oauth2/v2/userinfo',
+        {
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+          },
+        },
+      );
+
+      const googleUser: IdTokenPayload = userResponse.data;
+      console.log('googleUser:', googleUser);
+
+      const responseSyncAccount = await this.synchAuthAccount(googleUser);
+      console.log('responseSyncAccount:', responseSyncAccount);
+
+      // Construir respuesta base con tokens de Google
+      const response = {
+        access_token,
+        refresh_token,
+        expires_in,
+        id_token,
+        user: {
+          email: googleUser.email,
+          name: googleUser.name,
+          picture: googleUser.picture,
+        },
+        action: responseSyncAccount.data.action, // 'LOGIN' o 'REGISTER'
+        user_exists: responseSyncAccount.data.existUser,
+        message: responseSyncAccount.description,
+      };
+
+      // Si el usuario ya existe, hacer login automático
+      if (
+        responseSyncAccount.data.existUser &&
+        responseSyncAccount.data.action === 'LOGIN'
+      ) {
+        const loginResult = await this.logingApp(googleUser);
+
+        return {
+          ...response,
+          app_session: loginResult.data,
+          redirect_to: '/dashboard',
+        };
+      }
+
+      // Si el usuario no existe, retornar con indicación de registro
+      return {
+        ...response,
+        redirect_to: '/register',
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to handle auth callback: ${error}`);
+
+      if (error.response && error.response.data) {
+        this.logger.error(
+          `Google error response: ${JSON.stringify(error.response.data)}`,
+        );
+      }
+
+      throw new InternalServerErrorException(
+        'An error occurred during authentication callback',
+      );
+    }
+  }
+
   // =================== METODO DE SINCRONIZACION ===================
-  async synchAuthAccount(user_decode: IdTokenPayload): Promise<any> {
+  async synchAuthAccount(
+    user_decode: IdTokenPayload,
+  ): Promise<SyncAccountResponse> {
     try {
       const existUser = await this.userService.validateUserNotExists(
         user_decode.email,
       );
 
-      let response: any = null;
-
       if (existUser) {
-        response = {
-          descrption: 'Usuario sincronizado correctamente',
+        return {
+          description: 'Usuario sincronizado correctamente',
           data: {
             existUser: true,
             action: 'LOGIN',
           },
         };
       } else {
-        response = {
+        return {
           description: 'Usuario no registrado',
           data: {
             existUser: false,
@@ -79,8 +216,6 @@ export class AuthService {
           },
         };
       }
-
-      return response;
     } catch (error) {
       this.logger.error(`Failed to sync data: ${error}`);
 
@@ -99,7 +234,7 @@ export class AuthService {
   }
 
   // =================== METODOS DE SESSION ===================
-  async logingApp(user_decode: IdTokenPayload): Promise<any> {
+  async logingApp(user_decode: IdTokenPayload): Promise<LoginAppResponse> {
     try {
       const userData: GetUserByEmailResponse =
         await this.userService.getUserByEmail(user_decode.email);

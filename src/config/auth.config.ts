@@ -4,6 +4,13 @@ interface AuthConfig {
     expiresIn: string;
     refreshExpiresIn: string;
   };
+  auth0: {
+    domain: string;
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    audience: string;
+  };
 }
 
 export default (): AuthConfig => {
@@ -18,6 +25,13 @@ export default (): AuthConfig => {
       secret,
       expiresIn: process.env.JWT_EXPIRES_IN || '1h',
       refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+    },
+    auth0: {
+      domain: process.env.AUTH0_DOMAIN || '',
+      clientId: process.env.AUTH0_CLIENT_ID || '',
+      clientSecret: process.env.AUTH0_CLIENT_SECRET || '',
+      redirectUri: process.env.AUTH0_REDIRECT_URI || '',
+      audience: process.env.AUTH0_AUDIENCE || '',
     },
   };
 };

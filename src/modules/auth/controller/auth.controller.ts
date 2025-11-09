@@ -33,6 +33,18 @@ import { ApiRegisterOwnerDocs } from '../docs/register-owner.doc';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Post('login-url')
+  @HttpCode(HttpStatus.OK)
+  async getLoginUrl(): Promise<{ loginUrl: string }> {
+    return this.authService.getLoginUrl();
+  }
+
+  @Post('callback')
+  @HttpCode(HttpStatus.OK)
+  async handleAuthCallback(@Body('code') code: string) {
+    return this.authService.handleAuthCallback(code);
+  }
+
   @Post('sync-auth-account')
   @UseGuards(Auth0TokenGuard)
   @HttpCode(HttpStatus.OK)
