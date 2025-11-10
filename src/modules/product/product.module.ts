@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ProductController } from './controller/product.controller';
 import { ProductService } from './service/product.service';
-import { Auth0TokenService } from '../auth/service/auth0-token.service';
+import { GoogleTokenService } from '../auth/service/google-token.service';
 
 @Module({
   controllers: [ProductController],
-  providers: [ProductService, Auth0TokenService],
+  providers: [ProductService, GoogleTokenService],
 })
 export class ProductModule {}

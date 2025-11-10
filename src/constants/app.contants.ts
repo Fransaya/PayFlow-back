@@ -1,9 +1,9 @@
 export const USER_TYPE = {
-  OWNER: 'owner',
-  BUSINESS: 'business',
+  OWNER: 'OWNER',
+  BUSINESS: 'BUSINESS',
 };
 
 export const PROVIDER = {
-  AUTH0: 'auth0',
-  GOOGLE: 'google',
+  AUTH0: 'AUTH0',
+  GOOGLE: 'GOOGLE',
 };

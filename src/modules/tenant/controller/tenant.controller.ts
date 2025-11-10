@@ -14,7 +14,7 @@ import {
 
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { Auth0TokenGuard } from '@src/guards/auth0-token.guard';
+import { GoogleTokenGuard } from '@src/guards/google-token.guard';
 
 import { TenantService } from '../service/tenant.service';
 
@@ -30,7 +30,7 @@ export class TenantController {
   constructor(private readonly tenantService: TenantService) {}
 
   @Get()
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   async getTenantInfo(@Query('tenantId') tenantId: string): Promise<any> {
@@ -38,7 +38,7 @@ export class TenantController {
   }
 
   @Patch('update-info')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(

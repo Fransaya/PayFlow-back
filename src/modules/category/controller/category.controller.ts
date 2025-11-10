@@ -16,7 +16,7 @@ import {
 
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { Auth0TokenGuard } from '@src/guards/auth0-token.guard';
+import { GoogleTokenGuard } from '@src/guards/google-token.guard';
 
 import { ApiTags } from '@nestjs/swagger';
 
@@ -29,7 +29,7 @@ export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
   @Get()
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   async getCategoriesByTenant(
@@ -39,7 +39,7 @@ export class CategoryController {
   }
 
   @Post('create')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.CREATED)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -61,7 +61,7 @@ export class CategoryController {
     return await this.categoryService.createCategory(body);
   }
   @Patch('update')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -84,7 +84,7 @@ export class CategoryController {
   }
 
   @Delete('delete')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   async deleteCategory(@Query('categoryId') category_id: string): Promise<any> {

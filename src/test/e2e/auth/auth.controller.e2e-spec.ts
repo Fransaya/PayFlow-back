@@ -3,7 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '@src/app.module';
 import { AuthService } from '@src/modules/auth/service/auth.service';
-import { Auth0TokenService } from '@src/modules/auth/service/auth0-token.service';
+import { GoogleTokenService } from '@src/modules/auth/service/google-token.service';
 import { IdTokenPayload } from '@src/types/idTokenPayload';
 
 describe('AuthController (e2e)', () => {
@@ -12,7 +12,7 @@ describe('AuthController (e2e)', () => {
     registerOwner: jest.fn(),
     registerBusiness: jest.fn(),
   };
-  const auth0TokenService = {
+  const googleTokenService = {
     decodeIdToken: jest.fn(),
   };
 
@@ -22,8 +22,8 @@ describe('AuthController (e2e)', () => {
     })
       .overrideProvider(AuthService)
       .useValue(authService)
-      .overrideProvider(Auth0TokenService)
-      .useValue(auth0TokenService)
+      .overrideProvider(GoogleTokenService)
+      .useValue(googleTokenService)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -56,7 +56,7 @@ describe('AuthController (e2e)', () => {
         message: 'Owner registered successfully',
       };
       authService.registerOwner.mockResolvedValue(res);
-      auth0TokenService.decodeIdToken.mockResolvedValue(mockUser);
+      googleTokenService.decodeIdToken.mockResolvedValue(mockUser);
 
       const { body } = await request(app.getHttpServer())
         .post('/api/v1/auth/register-owner')
@@ -65,7 +65,7 @@ describe('AuthController (e2e)', () => {
         .expect(201);
 
       expect(body).toEqual(res);
-      expect(auth0TokenService.decodeIdToken).toHaveBeenCalledWith(
+      expect(googleTokenService.decodeIdToken).toHaveBeenCalledWith(
         'fake-token',
       );
       expect(authService.registerOwner).toHaveBeenCalledWith(dto, mockUser);
@@ -82,7 +82,7 @@ describe('AuthController (e2e)', () => {
     });
 
     it('→ 400 cuando el dto no valida', async () => {
-      auth0TokenService.decodeIdToken.mockResolvedValue(mockUser);
+      googleTokenService.decodeIdToken.mockResolvedValue(mockUser);
       await request(app.getHttpServer())
         .post('/api/v1/auth/register-owner')
         .set('x-oauth-token', 'Bearer fake-token')
@@ -101,7 +101,7 @@ describe('AuthController (e2e)', () => {
         message: 'Business registered successfully',
       };
       authService.registerBusiness.mockResolvedValue(res);
-      auth0TokenService.decodeIdToken.mockResolvedValue(mockUser);
+      googleTokenService.decodeIdToken.mockResolvedValue(mockUser);
 
       const { body } = await request(app.getHttpServer())
         .post('/api/v1/auth/register-business')

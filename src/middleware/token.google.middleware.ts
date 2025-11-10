@@ -5,12 +5,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
-import { Auth0TokenService } from '@src/modules/auth/service/auth0-token.service';
+import { GoogleTokenService } from '@src/modules/auth/service/google-token.service';
 import { IdTokenPayload } from '@src/types/idTokenPayload';
 
 @Injectable()
-export class TokenAuth0Middleware implements NestMiddleware {
-  constructor(private readonly auth0TokenService: Auth0TokenService) {}
+export class TokenGoogleMiddleware implements NestMiddleware {
+  constructor(private readonly googleTokenService: GoogleTokenService) {}
 
   async use(req: any, res: any, next: NextFunction) {
     try {
@@ -29,7 +29,7 @@ export class TokenAuth0Middleware implements NestMiddleware {
 
       // Verificar y decodificar el token
       const decodedToken: IdTokenPayload =
-        await this.auth0TokenService.decodeIdToken(token);
+        await this.googleTokenService.decodeIdToken(token);
 
       // Añadir los datos del usuario al request
       req.user = decodedToken;

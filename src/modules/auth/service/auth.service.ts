@@ -239,6 +239,8 @@ export class AuthService {
       const userData: GetUserByEmailResponse =
         await this.userService.getUserByEmail(user_decode.email);
 
+      console.log('userData', userData);
+
       if (!userData) {
         throw new UnauthorizedException('User not found');
       }
@@ -277,12 +279,14 @@ export class AuthService {
       );
 
       const sessionData: SessionAppCreate = {
-        user_owner_id: userData.user_ref,
-        user_id: userData.user_ref,
+        ...(userData.user_type === USER_TYPE.OWNER && {
+          user_owner_id: userData.user_ref,
+        }),
+        ...(userData.user_type === USER_TYPE.BUSINESS && {
+          user_id: userData.user_ref,
+        }),
         tenant_id: user_details.tenants.tenant_id,
-        provider: user_decode.iss.includes('auth0')
-          ? PROVIDER.AUTH0
-          : PROVIDER.GOOGLE,
+        provider: PROVIDER.GOOGLE,
         refresh_token_enc: refresh_token,
         refresh_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         ip_address: '', // TODO: obtener IP
@@ -569,7 +573,7 @@ export class AuthService {
         },
         {
           user_type: USER_TYPE.OWNER,
-          provider: PROVIDER.AUTH0,
+          provider: PROVIDER.GOOGLE,
           provider_sub: user_decode.sub,
         },
       );

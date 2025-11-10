@@ -16,7 +16,7 @@ import {
 
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { Auth0TokenGuard } from '@src/guards/auth0-token.guard';
+import { GoogleTokenGuard } from '@src/guards/google-token.guard';
 
 import { ApiTags } from '@nestjs/swagger';
 
@@ -29,7 +29,7 @@ export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
   @Get()
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   async getProductsByTenant(
@@ -54,7 +54,7 @@ export class ProductController {
   }
 
   @Post('create')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.CREATED)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -82,7 +82,7 @@ export class ProductController {
   }
 
   @Patch('update')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -110,7 +110,7 @@ export class ProductController {
   }
 
   @Delete('delete')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   async deleteProduct(@Query('productId') product_id: string): Promise<any> {

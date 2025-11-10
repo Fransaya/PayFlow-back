@@ -80,14 +80,16 @@ export function sessionRepo(tx: Prisma.TransactionClient) {
     }) {
       return await tx.session_app.create({
         data: {
-          user_owner_id: sessionData.user_owner_id || null,
-          user_id: sessionData.user_id || null,
+          ...(sessionData.user_owner_id && {
+            user_owner_id: sessionData.user_owner_id,
+          }),
+          ...(sessionData.user_id && { user_id: sessionData.user_id }),
           tenant_id: sessionData.tenant_id,
-          provider: sessionData.provider || null,
+          ...(sessionData.provider && { provider: sessionData.provider }),
           refresh_token_enc: sessionData.refresh_token_enc,
           refresh_expires_at: sessionData.refresh_expires_at,
-          ip_address: sessionData.ip_address || null,
-          user_agent: sessionData.user_agent || null,
+          ...(sessionData.ip_address && { ip_address: sessionData.ip_address }),
+          ...(sessionData.user_agent && { user_agent: sessionData.user_agent }),
           last_used_at: new Date(),
         },
       });
@@ -222,14 +224,16 @@ export function sessionRepo(tx: Prisma.TransactionClient) {
       // Si no existe, crear una nueva sesión
       return await tx.session_app.create({
         data: {
-          user_owner_id: sessionData.user_owner_id || null,
-          user_id: sessionData.user_id || null,
+          ...(sessionData.user_owner_id && {
+            user_owner_id: sessionData.user_owner_id,
+          }),
+          ...(sessionData.user_id && { user_id: sessionData.user_id }),
           tenant_id: sessionData.tenant_id,
-          provider: sessionData.provider || null,
+          ...(sessionData.provider && { provider: sessionData.provider }),
           refresh_token_enc: sessionData.refresh_token_enc,
           refresh_expires_at: sessionData.refresh_expires_at,
-          ip_address: sessionData.ip_address || null,
-          user_agent: sessionData.user_agent || null,
+          ...(sessionData.ip_address && { ip_address: sessionData.ip_address }),
+          ...(sessionData.user_agent && { user_agent: sessionData.user_agent }),
           last_used_at: new Date(),
         },
       });

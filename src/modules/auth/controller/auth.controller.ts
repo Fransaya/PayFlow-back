@@ -21,7 +21,7 @@ import {
 import { AuthService } from '../service/auth.service';
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { Auth0TokenGuard } from '@src/guards/auth0-token.guard';
+import { GoogleTokenGuard } from '@src/guards/google-token.guard';
 
 import { CurrentUser } from '../../../common/decorators/extractUser.decorator';
 import { IdTokenPayload } from '@src/types/idTokenPayload';
@@ -46,7 +46,7 @@ export class AuthController {
   }
 
   @Post('sync-auth-account')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UsePipes(
     new ValidationPipe({
@@ -60,21 +60,21 @@ export class AuthController {
   }
 
   @Post('login')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   logingApp(@CurrentUser() user: IdTokenPayload) {
     return this.authService.logingApp(user);
   }
 
   @Post('logout')
-  @UseGuards(Auth0TokenGuard) // Guardia adicional de token interno de app.
+  @UseGuards(GoogleTokenGuard) // Guardia adicional de token interno de app.
   @HttpCode(HttpStatus.OK)
   logout(@CurrentUser() user: IdTokenPayload) {
     return this.authService.logoutApp(user);
   }
 
   @Post('register-owner')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(
     new ValidationPipe({
@@ -92,7 +92,7 @@ export class AuthController {
   }
 
   @Post('register-business')
-  // @UseGuards(Auth0TokenGuard)
+  // @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(
     new ValidationPipe({

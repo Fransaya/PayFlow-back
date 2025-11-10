@@ -1,4 +1,4 @@
-// src/modules/auth/guard/auth0-token.guard.ts
+// src/modules/auth/guard/google-token.guard.ts
 import {
   Injectable,
   CanActivate,
@@ -6,15 +6,16 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Auth0TokenService } from '@src/modules/auth/service/auth0-token.service';
+import { GoogleTokenService } from '@src/modules/auth/service/google-token.service';
 import { IdTokenPayload } from '@src/types/idTokenPayload';
 
 @Injectable()
-export class Auth0TokenGuard implements CanActivate {
-  constructor(private readonly auth0TokenService: Auth0TokenService) {}
+export class GoogleTokenGuard implements CanActivate {
+  constructor(private readonly googleTokenService: GoogleTokenService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
+    console.log('headers', request.headers);
 
     // 1. Leer header personalizado
     const authHeader: string = request.headers['x-oauth-token'] as string;
@@ -29,9 +30,9 @@ export class Auth0TokenGuard implements CanActivate {
     }
 
     try {
-      // 3. Verificar y decodificar
+      // 3. Verificar y decodificar token de Google
       const decoded: IdTokenPayload =
-        await this.auth0TokenService.decodeIdToken(token);
+        await this.googleTokenService.decodeIdToken(token);
 
       // 4. Adjuntar usuario al request
       request.user = decoded;

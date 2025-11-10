@@ -18,7 +18,7 @@ import { ProductVariantService } from '../services/productVariant.service';
 
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { Auth0TokenGuard } from '@src/guards/auth0-token.guard';
+import { GoogleTokenGuard } from '@src/guards/google-token.guard';
 
 import { ApiTags } from '@nestjs/swagger';
 
@@ -29,7 +29,7 @@ export class ProductVariantController {
   constructor(private readonly productVariantService: ProductVariantService) {}
 
   @Get()
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   async getProductVariants(
@@ -41,7 +41,7 @@ export class ProductVariantController {
   }
 
   @Post('create')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.CREATED)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -73,7 +73,7 @@ export class ProductVariantController {
   }
 
   @Patch('update')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -107,7 +107,7 @@ export class ProductVariantController {
   }
 
   @Delete('delete')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   async deleteProductVariant(

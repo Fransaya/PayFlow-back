@@ -17,7 +17,7 @@ import { ApiTags } from '@nestjs/swagger';
 
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { Auth0TokenGuard } from '@src/guards/auth0-token.guard';
+import { GoogleTokenGuard } from '@src/guards/google-token.guard';
 
 // DTOs
 import { CreateBusinessDto } from '../dto/CreateBusiness.dto';
@@ -30,7 +30,7 @@ export class BusinessController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @UseFilters(HttpExceptionFilter)
   async getBusiness(
     @Query('tenantId') tenantId: string,
@@ -40,7 +40,7 @@ export class BusinessController {
   }
 
   @Post('create')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.CREATED)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -58,7 +58,7 @@ export class BusinessController {
   }
 
   @Post('update')
-  @UseGuards(Auth0TokenGuard)
+  @UseGuards(GoogleTokenGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(

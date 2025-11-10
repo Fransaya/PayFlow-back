@@ -1,5 +1,5 @@
 import { BadRequestException, Logger } from '@nestjs/common';
-import { Auth0TokenService } from '@src/modules/auth/service/auth0-token.service';
+import { GoogleTokenService } from '@src/modules/auth/service/google-token.service';
 
 export async function validateAndDecodeToken(idToken: string) {
   if (!idToken?.trim()) {
@@ -9,8 +9,8 @@ export async function validateAndDecodeToken(idToken: string) {
   const logger = new Logger();
 
   try {
-    const auth0TokenService = new Auth0TokenService();
-    const user_decoded = await auth0TokenService.decodeIdToken(idToken);
+    const googleTokenService = new GoogleTokenService();
+    const user_decoded = await googleTokenService.decodeIdToken(idToken);
 
     if (!user_decoded?.email) {
       throw new BadRequestException('Invalid token: email not found');

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '@src/modules/auth/service/auth.service';
-import { Auth0TokenService } from '@src/modules/auth/service/auth0-token.service';
+import { GoogleTokenService } from '@src/modules/auth/service/google-token.service';
 import { DbService } from '@libs/db';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -45,7 +45,7 @@ const mockTx = {
 describe('AuthService - unit', () => {
   let service: AuthService;
   let configService: jest.Mocked<Pick<ConfigService, 'get'>>;
-  let auth0TokenService: jest.Mocked<Pick<Auth0TokenService, 'decodeIdToken'>>;
+  let googleTokenService: jest.Mocked<Pick<GoogleTokenService, 'decodeIdToken'>>;
 
   const mockUser: IdTokenPayload = {
     sub: 'auth0|123',
@@ -77,7 +77,7 @@ describe('AuthService - unit', () => {
           },
         },
         {
-          provide: Auth0TokenService,
+          provide: GoogleTokenService,
           useValue: { decodeIdToken: jest.fn() },
         },
       ],
@@ -85,7 +85,7 @@ describe('AuthService - unit', () => {
 
     service = module.get<AuthService>(AuthService);
     configService = module.get(ConfigService);
-    auth0TokenService = module.get(Auth0TokenService);
+    googleTokenService = module.get(GoogleTokenService);
   });
 
   afterEach(() => {
