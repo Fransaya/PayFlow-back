@@ -2,11 +2,10 @@ import { Prisma } from '@prisma/client';
 
 export function businessRepo(tx: Prisma.TransactionClient) {
   return {
-    async getBusinessById(tenant_id: string, business_id: string) {
+    async getBusinessById(tenant_id: string) {
       return tx.business.findFirst({
         where: {
           tenant_id,
-          business_id,
         },
       });
     },
@@ -25,7 +24,7 @@ export function businessRepo(tx: Prisma.TransactionClient) {
           legal_name: data.legal_name.trim(),
           cuit: data.cuit?.trim() || null,
           contact_name: data.contact_name?.trim() || null,
-          contact_phone: data.contact_name?.trim() || null,
+          contact_phone: data.contact_phone?.trim() || null, // ← Corregido: era contact_name
           address: data.address?.trim() || null,
         },
       });
@@ -42,9 +41,20 @@ export function businessRepo(tx: Prisma.TransactionClient) {
         address?: string | null;
       },
     ) {
-      return tx.business.updateMany({
+      // Validar que el business pertenece al tenant
+      const business = await tx.business.findFirst({
         where: {
+          business_id,
           tenant_id,
+        },
+      });
+
+      if (!business) {
+        throw new Error('Business not found or does not belong to this tenant');
+      }
+
+      return tx.business.update({
+        where: {
           business_id,
         },
         data: {
@@ -62,6 +72,14 @@ export function businessRepo(tx: Prisma.TransactionClient) {
             data.address !== undefined
               ? data.address?.trim() || null
               : undefined,
+        },
+        select: {
+          business_id: true,
+          legal_name: true,
+          cuit: true,
+          contact_name: true,
+          contact_phone: true,
+          address: true,
         },
       });
     },

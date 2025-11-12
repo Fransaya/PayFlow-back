@@ -8,5 +8,6 @@ import { TenantService } from '../tenant/service/tenant.service';
 @Module({
   controllers: [AuthController],
   providers: [AuthService, GoogleTokenService, UserService, TenantService],
+  exports: [AuthService], // Exportar AuthService para que otros módulos puedan usarlo
 })
 export class AuthModule {}

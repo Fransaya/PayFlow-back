@@ -31,7 +31,20 @@ async function bootstrap() {
     defaultVersion: '1',
     prefix: 'v',
   });
-  app.enableCors();
+
+  // Configuración CORS con credenciales
+  app.enableCors({
+    origin: ['http://localhost:5173', 'http://localhost:3000'], // Orígenes permitidos
+    credentials: true, // Permitir envío de cookies/credenciales
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Métodos HTTP permitidos
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'x-oauth-token',
+    ], // Headers permitidos
+  });
+
   const port = configServive.get<number>('PORT') || 3000;
   await app.listen(port);
   console.log(`Listening on ${port}`);

@@ -19,5 +19,4 @@ export interface TenantUpdate {
   primary_color?: string | null;
   secondary_color?: string | null;
   custom_domain?: string | null;
-  currency?: string | null;
 }

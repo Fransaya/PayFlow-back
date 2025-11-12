@@ -102,7 +102,6 @@ export function tenantRepo(tx: Prisma.TransactionClient) {
         updateData.secondary_color = body.secondary_color.trim();
       if (body.custom_domain)
         updateData.custom_domain = body.custom_domain.trim();
-      if (body.currency) updateData.currency = body.currency.trim();
 
       return await tx.tenant.update({
         where: { tenant_id: tenantId },

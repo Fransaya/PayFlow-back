@@ -7,9 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 
-import crypto from 'crypto';
 import axios from 'axios';
-import { URLSearchParams } from 'url';
 
 import { USER_TYPE, PROVIDER } from '@src/constants/app.contants';
 
@@ -43,6 +41,7 @@ import { InviteToken } from '@src/types/inviteToken';
 import { validateInviteToken } from '../utility/validateInviteToken';
 import { validateInviteTokenEmail } from '../utility/validateInviteTokenEmail';
 import { validateOwnerRegistrationData } from '../utility/validateOwnerRegistrationData';
+import { decodeToken } from '../utility/decodeToken';
 
 // Metodo de user.service
 import { UserService } from '@src/modules/user/service/user.service';
@@ -61,20 +60,6 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly tenantService: TenantService,
   ) {}
-
-  /**
-   * Función auxiliar: Genera código aleatorio
-   */
-  generateRandomString(length: number) {
-    return crypto.randomBytes(length).toString('base64url');
-  }
-
-  /**
-   * Función auxiliar: Genera code challenge para PKCE
-   */
-  generateCodeChallenge(verifier: string) {
-    return crypto.createHash('sha256').update(verifier).digest('base64url');
-  }
 
   // =================== METODO DE OBTENCION URL LOGIN ===================
 
@@ -135,10 +120,8 @@ export class AuthService {
       );
 
       const googleUser: IdTokenPayload = userResponse.data;
-      console.log('googleUser:', googleUser);
 
       const responseSyncAccount = await this.synchAuthAccount(googleUser);
-      console.log('responseSyncAccount:', responseSyncAccount);
 
       // Construir respuesta base con tokens de Google
       const response = {
@@ -607,5 +590,17 @@ export class AuthService {
         },
       );
     });
+  }
+
+  // ===================  VALIDACIONES DE JWT ===================
+  validateJwtToken(token: string) {
+    try {
+      const decoded = decodeToken(token);
+
+      return decoded;
+    } catch (error) {
+      this.logger.error(`Failed to validate JWT token: ${error}`);
+      throw new UnauthorizedException('Invalid JWT token');
+    }
   }
 }

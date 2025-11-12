@@ -14,11 +14,11 @@ export class BusinessService {
 
   constructor(private readonly dbService: DbService) {}
 
-  async getBusiness(tenant_id: string, business_id: string) {
+  async getBusiness(tenant_id: string) {
     try {
       const response = await this.dbService.runInTransaction({}, async (tx) => {
         const repo = businessRepo(tx);
-        return repo.getBusinessById(tenant_id, business_id);
+        return repo.getBusinessById(tenant_id);
       });
 
       return response;
@@ -36,8 +36,8 @@ export class BusinessService {
           tenant_id,
           legal_name: business.legal_name,
           cuit: business.cuit,
-          contact_name: business.contanct_name,
-          contact_phone: business.contanct_phone,
+          contact_name: business.contact_name,
+          contact_phone: business.contact_phone,
           address: business.address,
         });
       });
@@ -60,8 +60,8 @@ export class BusinessService {
         return repo.updateBusiness(tenant_id, business_id, {
           legal_name: business.legal_name,
           cuit: business.cuit,
-          contact_name: business.contanct_name,
-          contact_phone: business.contanct_phone,
+          contact_name: business.contact_name,
+          contact_phone: business.contact_phone,
           address: business.address,
         });
       });

@@ -11,10 +11,11 @@ import {
   UseFilters,
   Controller,
 } from '@nestjs/common';
+import { CurrentUser } from '@src/common/decorators/extractUser.decorator';
 
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { GoogleTokenGuard } from '@src/guards/google-token.guard';
+import { JwtGuard } from '@src/guards/jwt.guard';
 
 import { TenantService } from '../service/tenant.service';
 
@@ -30,15 +31,16 @@ export class TenantController {
   constructor(private readonly tenantService: TenantService) {}
 
   @Get()
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
-  async getTenantInfo(@Query('tenantId') tenantId: string): Promise<any> {
+  async getTenantInfo(@CurrentUser() user: any): Promise<any> {
+    const tenantId = user.tenant_id;
     return await this.tenantService.getTenantInfo(tenantId);
   }
 
   @Patch('update-info')
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -50,8 +52,13 @@ export class TenantController {
   )
   async updateTenantInfo(
     @Body() body: UpdateTenantDto,
-    @Query('tenantId') tenantId: string,
+    @CurrentUser() user: any,
   ): Promise<any> {
+    const tenantId = user.tenant_id;
+
+    if (!tenantId) {
+      throw new Error('Tenant ID is required');
+    }
     return await this.tenantService.updateTenantInfo(body, tenantId);
   }
 }

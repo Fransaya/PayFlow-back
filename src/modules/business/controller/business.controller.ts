@@ -1,6 +1,7 @@
 import {
   Get,
   Controller,
+  Patch,
   Post,
   Body,
   HttpCode,
@@ -15,10 +16,11 @@ import {
 import { BusinessService } from '../services/business.service';
 import { ApiTags } from '@nestjs/swagger';
 
+import { CurrentUser } from '@src/common/decorators/extractUser.decorator';
+
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { GoogleTokenGuard } from '@src/guards/google-token.guard';
-
+import { JwtGuard } from '@src/guards/jwt.guard';
 // DTOs
 import { CreateBusinessDto } from '../dto/CreateBusiness.dto';
 
@@ -30,17 +32,15 @@ export class BusinessController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @UseFilters(HttpExceptionFilter)
-  async getBusiness(
-    @Query('tenantId') tenantId: string,
-    @Query('businessId') businessId: string,
-  ): Promise<any> {
-    return await this.businessService.getBusiness(tenantId, businessId);
+  async getBusiness(@CurrentUser() user: any): Promise<any> {
+    const tenantId = user.tenant_id;
+    return await this.businessService.getBusiness(tenantId);
   }
 
   @Post('create')
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.CREATED)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -52,13 +52,14 @@ export class BusinessController {
   )
   async createBusiness(
     @Body() body: CreateBusinessDto,
-    @Query('tenantId') tenantId: string,
+    @CurrentUser() user: any,
   ): Promise<any> {
+    const tenantId = user.tenant_id;
     return await this.businessService.createBusiness(tenantId, body);
   }
 
-  @Post('update')
-  @UseGuards(GoogleTokenGuard)
+  @Patch('update')
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -70,9 +71,10 @@ export class BusinessController {
   )
   async updateBusiness(
     @Body() body: CreateBusinessDto,
-    @Query('tenantId') tenantId: string,
+    @CurrentUser() user: any,
     @Query('businessId') businessId: string,
   ): Promise<any> {
+    const tenantId = user.tenant_id;
     return await this.businessService.updateBusiness(
       tenantId,
       businessId,
