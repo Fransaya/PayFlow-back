@@ -12,3 +12,6 @@ export * from './repos/business.repo';
 export * from './repos/category.repo';
 export * from './repos/product.repo';
 export * from './repos/productVariant.repo';
+export * from './repos/userOwner.repo';
+export * from './repos/userBusiness.repo';
+export * from './repos/user.repo';

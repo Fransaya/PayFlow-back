@@ -222,8 +222,6 @@ export class AuthService {
       const userData: GetUserByEmailResponse =
         await this.userService.getUserByEmail(user_decode.email);
 
-      console.log('userData', userData);
-
       if (!userData) {
         throw new UnauthorizedException('User not found');
       }

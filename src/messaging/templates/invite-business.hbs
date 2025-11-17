@@ -1,0 +1,224 @@
+<html lang='es'>
+  <head>
+    <meta charset='UTF-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+    <title>Invitación a {{storeName}}</title>
+    <style
+    >
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 40px auto;
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, {{primaryColor}} 0%, {{secondaryColor}} 100%);
+            padding: 40px 30px;
+            text-align: center;
+            color: #ffffff;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #333333;
+            margin-bottom: 20px;
+        }
+        .message {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #555555;
+            margin-bottom: 30px;
+        }
+        .highlight {
+            background-color: #f8f9fa;
+            border-left: 4px solid {{primaryColor}};
+            padding: 15px 20px;
+            margin: 25px 0;
+            border-radius: 4px;
+        }
+        .highlight p {
+            margin: 8px 0;
+            font-size: 14px;
+            color: #666666;
+        }
+        .highlight strong {
+            color: #333333;
+        }
+        .cta-button {
+            display: inline-block;
+            padding: 16px 40px;
+            background: linear-gradient(135deg, {{primaryColor}} 0%, {{secondaryColor}} 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .info-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .info-section h3 {
+            font-size: 16px;
+            color: #333333;
+            margin-bottom: 15px;
+        }
+        .info-section ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .info-section li {
+            padding: 8px 0;
+            color: #666666;
+            font-size: 14px;
+        }
+        .info-section li:before {
+            content: "✓ ";
+            color: {{primaryColor}};
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #999999;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .footer a {
+            color: {{primaryColor}};
+            text-decoration: none;
+        }
+        .divider {
+            height: 1px;
+            background-color: #e0e0e0;
+            margin: 30px 0;
+        }
+        .note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #856404;
+        }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <!-- Header -->
+      <div class='header'>
+        <h1>🎉 ¡Has sido invitado!</h1>
+        <p>{{storeName}}</p>
+      </div>
+
+      <!-- Content -->
+      <div class='content'>
+        <div class='greeting'>
+          Hola
+          <strong>{{employeeName}}</strong>,
+        </div>
+
+        <div class='message'>
+          <p>¡Tenemos excelentes noticias!
+            <strong>{{ownerName}}</strong>
+            te ha invitado a unirte al equipo de
+            <strong>{{storeName}}</strong>
+            como colaborador del sistema de gestión de pedidos.</p>
+
+          <p>Ahora podrás gestionar pedidos, productos y ayudar a hacer crecer
+            el negocio junto al equipo.</p>
+        </div>
+
+        <div class='highlight'>
+          <p><strong>📧 Email de acceso:</strong> {{employeeEmail}}</p>
+          <p><strong>🏪 Tienda:</strong> {{storeName}}</p>
+          {{#if roleName}}
+            <p><strong>👤 Rol asignado:</strong> {{roleName}}</p>
+          {{/if}}
+        </div>
+
+        <!-- CTA Button -->
+        <div style='text-align: center;'>
+          <a href='{{inviteUrl}}' class='cta-button'>
+            Aceptar Invitación y Acceder
+          </a>
+        </div>
+
+        {{#if expiresIn}}
+          <div class='note'>
+            ⏰
+            <strong>Importante:</strong>
+            Esta invitación expira en
+            <strong>{{expiresIn}}</strong>. Asegúrate de aceptarla antes de que
+            caduque.
+          </div>
+        {{/if}}
+
+        <!-- Info Section -->
+        <div class='info-section'>
+          <h3>¿Qué puedes hacer en el sistema?</h3>
+          <ul>
+            <li>Gestionar pedidos en tiempo real</li>
+            <li>Administrar el catálogo de productos</li>
+            <li>Ver estadísticas y reportes de ventas</li>
+            <li>Comunicarte con clientes</li>
+            <li>Y mucho más...</li>
+          </ul>
+        </div>
+
+        <div class='divider'></div>
+
+        <p style='font-size: 14px; color: #666666; text-align: center;'>
+          Si tienes problemas para hacer clic en el botón, copia y pega este
+          enlace en tu navegador:
+        </p>
+        <p
+          style='font-size: 13px; color: {{primaryColor}}; text-align: center; word-break: break-all;'
+        >
+          {{inviteUrl}}
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div class='footer'>
+        <p>Este email fue enviado por <strong>{{storeName}}</strong></p>
+        <p>Si no esperabas esta invitación, puedes ignorar este mensaje.</p>
+        <div style='margin-top: 20px;'>
+          <p>¿Necesitas ayuda?
+            <a href='mailto:{{supportEmail}}'>Contáctanos</a></p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

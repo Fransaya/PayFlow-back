@@ -15,6 +15,8 @@ import { BusinessModule } from './modules/business/business.module';
 import { ProductVariantModule } from './modules/productVariant/productVariant.module';
 import { CategoryModule } from './modules/category/category.module';
 import { ProductModule } from './modules/product/product.module';
+import { UserOwnerModule } from './modules/userOwner/userOwner.module';
+import { UserBusinessModule } from './modules/userBusiness/userBusiness.module';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { ProductModule } from './modules/product/product.module';
     ProductVariantModule,
     CategoryModule,
     ProductModule,
+    UserOwnerModule,
+    UserBusinessModule,
   ],
   controllers: [AppController],
   providers: [AppService, DbService, UserService],
