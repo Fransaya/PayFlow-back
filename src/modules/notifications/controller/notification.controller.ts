@@ -1,6 +1,4 @@
 import {
-  Get,
-  Put,
   Body,
   HttpCode,
   HttpStatus,
@@ -10,8 +8,6 @@ import {
   UseFilters,
   Controller,
   Post,
-  Param,
-  BadRequestException,
 } from '@nestjs/common';
 import { CurrentUser } from '@src/common/decorators/extractUser.decorator';
 
@@ -29,7 +25,7 @@ import { NotificationService } from '../service/notification.service';
 @Controller('notifications')
 @UseFilters(HttpExceptionFilter)
 export class NotificationController {
-  constructor(private readonly notificationService: NotificationService) {}
+  constructor(private readonly notificationService: NotificationService) { }
 
   @Post('invite')
   @UseGuards(JwtGuard)
@@ -38,12 +34,11 @@ export class NotificationController {
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async sendInvitationNotification(
     @CurrentUser() user: UserFromJWT,
-    @Body() body: { email: string; name: string },
+    @Body() body: { email: string; name: string; userId: string },
   ): Promise<{ message: string }> {
-    // Aquí iría la lógica para enviar la notificación de invitación
-    // Por ejemplo, usando un servicio de notificaciones
-    //TODO: logica para validar la intitaciones - pensar e implementar
 
-    return { message: `Invitation sent to ${email}` };
+    await this.notificationService.sendInviteBusinessEmail(body, user);
+
+    return { message: 'Invitation notification sent successfully' };
   }
 }

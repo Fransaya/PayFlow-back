@@ -17,6 +17,22 @@ export class TenantService {
 
   constructor(private readonly dbService: DbService) {}
 
+  async getPublicTenantInfo(slug: string) {
+    try {
+      const response = await this.dbService.runInTransaction({}, async (tx) => {
+        const repo = tenantRepo(tx);
+        return repo.getPublicTenantInfoBySlug(slug);
+      });
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error getting public tenant info: ${error}`);
+      throw new InternalServerErrorException(
+        'Error getting public tenant info',
+      );
+    }
+  }
+
   async getTenantInfo(tenantId: string) {
     try {
       const response = await this.dbService.runInTransaction({}, async (tx) => {

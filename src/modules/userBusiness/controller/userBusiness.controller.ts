@@ -36,6 +36,17 @@ import {
 export class UserBusinessController {
   constructor(private readonly userBusinessService: UserBusinessService) {}
 
+  @Get('info/:userId')
+  @HttpCode(HttpStatus.OK)
+  @UseFilters(HttpExceptionFilter)
+  async getUserBusinessBasicInfo(@Param('userId') userId: string): Promise<any> {
+
+    const userBusinessInfo =
+      await this.userBusinessService.getUserBusinessBasicInfo(userId);
+
+    return userBusinessInfo;
+  }
+
   @Get()
   @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)

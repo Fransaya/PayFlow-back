@@ -43,6 +43,7 @@ export function userRepo(tx: Prisma.TransactionClient) {
     async userExistsInTenant(
       email: string,
       tenantId: string,
+      userId: string,
     ): Promise<boolean> {
       if (!email?.trim()) throw new Error('Email is required');
       if (!tenantId?.trim()) throw new Error('Tenant ID is required');
@@ -60,11 +61,12 @@ export function userRepo(tx: Prisma.TransactionClient) {
 
       if (userOwner) return true;
 
-      // Buscar en user_business
+      // Buscar en user_business (excluyendo el userId actual)
       const userBusiness = await tx.user_business.findFirst({
         where: {
           email: normalizedEmail,
           tenant_id: tenantId.trim(),
+          ...(userId && { user_id: { not: userId.trim() } }), // Excluir el usuario actual
         },
         select: { user_id: true },
       });
@@ -86,6 +88,7 @@ export function userRepo(tx: Prisma.TransactionClient) {
           provider: true,
           provider_sub: true,
           email: true,
+          password_hash: true,
         },
       });
 

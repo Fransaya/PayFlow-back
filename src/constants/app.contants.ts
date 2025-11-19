@@ -6,6 +6,7 @@ export const USER_TYPE = {
 export const PROVIDER = {
   AUTH0: 'AUTH0',
   GOOGLE: 'GOOGLE',
+  LOCAL: 'LOCAL',
 };
 
 export const USERS_BUSINESS_STATUS = {

@@ -30,6 +30,13 @@ import { UpdateTenantDto } from '../dto/UpdateTenant.dto';
 export class TenantController {
   constructor(private readonly tenantService: TenantService) {}
 
+  @Get('info')
+  @HttpCode(HttpStatus.OK)
+  @UseFilters(HttpExceptionFilter)
+  async getPublicTenantInfo(@Query('slug') slug: string): Promise<any> {
+    return await this.tenantService.getPublicTenantInfo(slug);
+  }
+
   @Get()
   @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)

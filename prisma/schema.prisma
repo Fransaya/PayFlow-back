@@ -169,12 +169,23 @@ model product_variant {
 }
 
 model role {
-  role_id     String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  role_id     String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String     @db.Uuid // <--- AGREGADO: Clave de aislamiento multi-tenant
   name        String
   description String?
-  permission  Json?
-  active      Boolean?    @default(true)
+  // CAMBIADO: Array de strings para almacenar permisos granulares (ej: ["product:read", "order:write"])
+  permissions String[]   @db.Text
+  active      Boolean?   @default(true)
+  created_at  DateTime   @default(now()) @db.Timestamptz(6)
+
+  // Relaciones
+  tenant      tenant     @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
   user_role   user_role[]
+
+  // Índices
+  @@index([tenant_id])
+  // Restricción única para el nombre del rol dentro del mismo tenant
+  @@unique([tenant_id, name])
 }
 
 model session_app {
@@ -219,6 +230,7 @@ model tenant {
   session_app     session_app[]
   user_business   user_business[]
   user_owner      user_owner[]
+  roles              role[]
 
   @@index([slug], map: "idx_tenants_slug")
 }

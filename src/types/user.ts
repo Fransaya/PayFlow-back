@@ -6,6 +6,7 @@ export interface AuthAccountBase {
   provider: string | null;
   provider_sub: string | null;
   email: string;
+  password_hash?: string; // Agregado para login local
 }
 
 // Tipo para los datos del tenant

@@ -48,6 +48,7 @@ export function authRepo(tx: Prisma.TransactionClient) {
 
     async createBusinessWithTransaction(
       user_data: {
+        id: string;
         tenant_id: string;
         name: string;
         email: string;
@@ -60,12 +61,11 @@ export function authRepo(tx: Prisma.TransactionClient) {
         password_hash?: string;
       },
     ) {
-      const user_business = await tx.user_business.create({
+      const user_business = await tx.user_business.update({
+        where: { user_id: user_data.id },
         data: {
-          tenant_id: user_data.tenant_id,
           name: user_data.name.trim(),
           email: user_data.email.toLowerCase().trim(),
-          status: user_data.status,
         },
       });
 

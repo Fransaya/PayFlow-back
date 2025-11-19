@@ -35,11 +35,12 @@ export class UserService {
   async validateUserNotInTenant(
     email: string,
     tenantId: string,
+    userId: string,
   ): Promise<void> {
     try {
       const exists = await this.dbService.runInTransaction({}, async (tx) => {
         const repo = userRepo(tx);
-        return repo.userExistsInTenant(email, tenantId); // Asumiendo que tienes este método
+        return repo.userExistsInTenant(email, tenantId, userId); // Asumiendo que tienes este método
       });
 
       if (exists) {

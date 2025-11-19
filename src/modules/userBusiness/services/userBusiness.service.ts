@@ -17,6 +17,20 @@ export class UserBusinessService {
 
   constructor(private readonly dbService: DbService) {}
 
+  async getUserBusinessBasicInfo(userId: string) {
+    try {
+      const response = await this.dbService.runInTransaction({}, async (tx)=> {
+        const repo = userBusinessRepo(tx);
+        return repo.getUserBusinessBasicInfo(userId);
+      });
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error getting user business basic info: ${error}`);
+      throw new InternalServerErrorException('Error getting user business basic info');
+    }
+  }
+
   async getUsersForBusiness(tenantId: string) {
     try {
       const response = await this.dbService.runInTransaction({}, async (tx) => {
@@ -28,6 +42,22 @@ export class UserBusinessService {
     } catch (error) {
       this.logger.error(`Error getting tenant info: ${error}`);
       throw new InternalServerErrorException('Error getting tenant info');
+    }
+  }
+
+  async getSpecificUserBusiness(tenantId: string, userId: string) {
+    try {
+      const response = await this.dbService.runInTransaction({}, async (tx) => {
+        const repo = userBusinessRepo(tx);
+        return repo.getSpecificUserBusiness(tenantId, userId);
+      });
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error getting specific user business: ${error}`);
+      throw new InternalServerErrorException(
+        'Error getting specific user business',
+      );
     }
   }
 

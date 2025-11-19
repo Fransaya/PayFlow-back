@@ -27,6 +27,29 @@ export function tenantRepo(tx: Prisma.TransactionClient) {
       return !!tenant;
     },
 
+    async getPublicTenantInfoBySlug(slug: string) {
+      if (!slug?.trim()) throw new Error('Slug is required');
+
+      return await tx.tenant.findUnique({
+        where: { slug: slug.trim().toLowerCase() },
+        select: {
+          tenant_id: true,
+          name: true,
+          slug: true,
+          primary_color: true,
+          secondary_color: true,
+          custom_domain: true,
+          created_at: true,
+          business: {
+            select: {
+              logo_url: true,
+            },
+            take: 1, // Solo el primero si hay múltiples
+          },
+        },
+      });
+    },
+
     async getTenantById(tenantId: string) {
       if (!tenantId?.trim()) throw new Error('Tenant ID is required');
 

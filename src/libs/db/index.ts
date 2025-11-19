@@ -15,3 +15,4 @@ export * from './repos/productVariant.repo';
 export * from './repos/userOwner.repo';
 export * from './repos/userBusiness.repo';
 export * from './repos/user.repo';
+export * from './repos/role.repo';

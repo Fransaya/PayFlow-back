@@ -57,7 +57,7 @@ export class RegisterOwnerDoc
 
 // ----- Business -----
 export class UserBusinessDoc
-  implements Omit<UserBusinessDto, 'email' | 'name'>
+  implements Omit<UserBusinessDto, 'email' | 'name' | 'id' | 'password'>
 {
   @ApiProperty({ example: 'test@example.com' })
   email: string;

@@ -52,6 +52,10 @@ export class RegisterOwnerDto {
 }
 
 export class UserBusinessDto {
+  @IsString()
+  @IsNotEmpty()
+  id: string;
+
   @IsEmail()
   @IsNotEmpty()
   email: string;
@@ -59,6 +63,10 @@ export class UserBusinessDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @IsString()
+  @IsNotEmpty()
+  password: string;
 }
 
 export class RegisterBusinessDto {

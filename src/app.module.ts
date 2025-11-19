@@ -18,10 +18,16 @@ import { ProductModule } from './modules/product/product.module';
 import { UserOwnerModule } from './modules/userOwner/userOwner.module';
 import { UserBusinessModule } from './modules/userBusiness/userBusiness.module';
 
+// Modulo de notificaciones ( funcionalidad de nivel 1)
+import { NotificationModule } from './modules/notifications/notification.module';
+import { RoleModule } from './modules/roles/role.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [authConfig] }),
     MessagingModule,
+    RoleModule,
+    NotificationModule,
     AuthModule,
     DbModule,
     TenantModule,

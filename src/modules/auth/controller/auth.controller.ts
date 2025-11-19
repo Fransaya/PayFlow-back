@@ -9,6 +9,7 @@ import {
   ValidationPipe,
   Query,
   UseGuards,
+  Param,
 } from '@nestjs/common';
 
 import { ApiTags } from '@nestjs/swagger';
@@ -66,6 +67,22 @@ export class AuthController {
     return this.authService.logingApp(user);
   }
 
+  @Post('login-business/:tenantSlug')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  )
+  loginBusinessApp(
+    @Body() body: { email: string; password: string },
+    @Param('tenantSlug') tenantSlug: string,
+  ) {
+    return this.authService.loginBusinessApp(body, tenantSlug);
+  }
+
   @Post('logout')
   @UseGuards(GoogleTokenGuard) // Guardia adicional de token interno de app.
   @HttpCode(HttpStatus.OK)
@@ -104,9 +121,8 @@ export class AuthController {
   async registerBusiness(
     @Body() body: RegisterBusinessDto,
     @Query() queryParams: QueryParmsRegisterBusinessDto,
-    @CurrentUser() user: IdTokenPayload,
   ) {
-    return await this.authService.registerBusiness(body, queryParams, user);
+    return await this.authService.registerBusiness(body, queryParams);
   }
 
   //TODO: pendiente de implementacion

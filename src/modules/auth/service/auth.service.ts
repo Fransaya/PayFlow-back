@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 
 import axios from 'axios';
+import * as bcrypt from 'bcrypt';
 
 import { USER_TYPE, PROVIDER } from '@src/constants/app.contants';
 
@@ -49,6 +50,7 @@ import { TenantService } from '@src/modules/tenant/service/tenant.service';
 
 // Utilidad para generacion de token
 import { generateToken } from '../utility/generateToken';
+import { hashPassword } from '../utility/hashPassword';
 
 @Injectable()
 export class AuthService {
@@ -303,6 +305,108 @@ export class AuthService {
     }
   }
 
+  async loginBusinessApp(
+    body: {
+      email: string;
+      password: string;
+    },
+    slug: string,
+  ): Promise<any> {
+    try {
+      const userData: GetUserByEmailResponse =
+        await this.userService.getUserByEmail(body.email);
+
+      if (!userData) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Validar que tenga user_details
+      if (!('user_details' in userData) || !userData.user_details) {
+        throw new UnauthorizedException('User details not found');
+      }
+
+      // Validar que tenga provider
+      if (!userData.provider) {
+        throw new UnauthorizedException('User provider not found');
+      }
+
+      const { user_details } = userData;
+
+      if (!userData) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      //* Comparo las claves
+      const passwordMatch = await bcrypt.compare(
+        body.password,
+        userData.password_hash || '',
+      );
+
+      if (!passwordMatch) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+
+      //* Valido si el slug recibido coincide con el del tenant del usuario
+      if (user_details.tenants.slug !== slug) {
+        throw new UnauthorizedException('Invalid tenant slug');
+      }
+
+      // Genero token de access_token de aplicacion y refresh token internos para la aplicacion ( session )
+      const access_token: string = generateToken(
+        {
+          user_id: userData.user_ref,
+          tenant_id: user_details.tenants.tenant_id,
+          provider: userData.provider,
+        },
+        userData,
+        this.config.jwt.expiresIn,
+      );
+
+      const refresh_token: string = generateToken(
+        {
+          user_id: userData.user_ref,
+          tenant_id: user_details.tenants.tenant_id,
+          provider: userData.provider,
+        },
+        userData,
+        this.config.jwt.refreshExpiresIn,
+      );
+
+      const sessionData: SessionAppCreate = {
+        ...(userData.user_type === USER_TYPE.OWNER && {
+          user_owner_id: userData.user_ref,
+        }),
+        ...(userData.user_type === USER_TYPE.BUSINESS && {
+          user_id: userData.user_ref,
+        }),
+        tenant_id: user_details.tenants.tenant_id,
+        provider: PROVIDER.LOCAL,
+        refresh_token_enc: refresh_token,
+        refresh_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        ip_address: '', // TODO: obtener IP
+        user_agent: '', // TODO: obtener user agent
+      };
+
+      const session = await this.upsertSession(sessionData);
+
+      return {
+        description: 'Login successful',
+        data: {
+          access_token,
+          refresh_token,
+          token_type: 'Bearer',
+          expires_in: this.config.jwt.expiresIn,
+          session,
+        },
+      };
+
+      // Guardo y genero data para la session
+    } catch (error) {
+      this.logger.error(`Failed to login: ${error}`);
+      throw new InternalServerErrorException('An error occurred during login');
+    }
+  }
+
   async logoutApp(user_decode: IdTokenPayload): Promise<any> {
     try {
       const result = await this.deleteSessionForUser(user_decode.sub);
@@ -476,18 +580,21 @@ export class AuthService {
   async registerBusiness(
     body: RegisterBusinessDto,
     queryParams: QueryParmsRegisterBusinessDto,
-    user_decode: IdTokenPayload,
   ) {
     const { invite_token } = queryParams;
-    const { user } = body;
+    const { user }: RegisterBusinessDto = body;
+
+    console.log('user', user);
 
     try {
       // 1. Validar y decodificar invite token
       const decoded_invite_token: InviteToken =
         validateInviteToken(invite_token);
 
+      console.log('decoded_invite_token', decoded_invite_token);
+
       // 2. Validar que el email del token coincide con el del usuario
-      validateInviteTokenEmail(decoded_invite_token, user_decode.email);
+      validateInviteTokenEmail(decoded_invite_token, body.user.email);
 
       // 3. Validar que el tenant existe
       await this.tenantService.validateTenantExists(
@@ -496,16 +603,20 @@ export class AuthService {
 
       // 4. Validar que el usuario no esté ya registrado en este tenant
       await this.userService.validateUserNotInTenant(
-        user_decode.email,
+        body.user.email,
         decoded_invite_token.tenant_id,
+        body.user.id,
       );
 
       // 5. Crear business user
       const result = await this.createBusinessRegistration({
         decoded_invite_token,
         user,
-        user_decode,
       });
+
+      const tenantInfo = await this.tenantService.getTenantInfo(
+        decoded_invite_token.tenant_id,
+      );
 
       this.logger.log(
         `Business user registered successfully for tenant: ${decoded_invite_token.tenant_id}`,
@@ -514,6 +625,7 @@ export class AuthService {
       return {
         success: true,
         data: result,
+        tenant: { slug: tenantInfo?.slug || '' },
         message: 'Business user registered successfully',
       };
     } catch (error: any) {
@@ -564,27 +676,28 @@ export class AuthService {
   private async createBusinessRegistration({
     decoded_invite_token,
     user,
-    user_decode,
   }: {
     decoded_invite_token: InviteToken;
-    user: { name: string; email: string };
-    user_decode: IdTokenPayload;
+    user: { id: string; name: string; email: string; password: string };
   }) {
+    const passwordHash = await hashPassword(user.password);
+
     return this.dbService.runInTransaction({}, async (tx) => {
       const repository = authRepo(tx);
 
       return repository.createBusinessWithTransaction(
         {
+          id: user.id,
           tenant_id: decoded_invite_token.tenant_id,
           name: user.name,
-          email: user_decode.email,
+          email: user.email,
           status: decoded_invite_token.status,
         },
         {
           user_type: USER_TYPE.BUSINESS,
-          provider: PROVIDER.AUTH0,
-          provider_sub: user_decode.sub,
-          password_hash: '',
+          provider: PROVIDER.LOCAL,
+          provider_sub: user.id,
+          password_hash: passwordHash,
         },
       );
     });
