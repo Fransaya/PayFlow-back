@@ -15,10 +15,13 @@ export class UserOwnerService {
 
   async getUserOwnerInfo(userId: string, tenantId: string) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = userOwnerRepo(tx);
-        return repo.getUserOwnerInfo(userId, tenantId);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = userOwnerRepo(tx);
+          return repo.getUserOwnerInfo(userId, tenantId);
+        },
+      );
 
       return response;
     } catch (error) {
@@ -29,10 +32,13 @@ export class UserOwnerService {
 
   async updateUserOwner(body: UpdateUserOwnerDto, tenantId: string) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = userOwnerRepo(tx);
-        return repo.updateUserOwner(body, tenantId);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = userOwnerRepo(tx);
+          return repo.updateUserOwner(body, tenantId);
+        },
+      );
 
       return response;
     } catch (error) {

@@ -22,10 +22,13 @@ export class CategoryService {
 
   async getCategoriesByTenant(tenantId: string) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = categoryRepo(tx);
-        return repo.getCategoryByTenant(tenantId);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = categoryRepo(tx);
+          return repo.getCategoryByTenant(tenantId);
+        },
+      );
 
       // Transformar image_url (que es un key) a una URL firmada
       if (response) {

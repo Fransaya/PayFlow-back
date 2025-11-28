@@ -38,10 +38,13 @@ export class UserService {
     userId: string,
   ): Promise<void> {
     try {
-      const exists = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = userRepo(tx);
-        return repo.userExistsInTenant(email, tenantId, userId); // Asumiendo que tienes este método
-      });
+      const exists = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = userRepo(tx);
+          return repo.userExistsInTenant(email, tenantId, userId); // Asumiendo que tienes este método
+        },
+      );
 
       if (exists) {
         throw new ConflictException(

@@ -35,10 +35,13 @@ export class TenantService {
 
   async getTenantInfo(tenantId: string) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = tenantRepo(tx);
-        return repo.getTenantById(tenantId);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = tenantRepo(tx);
+          return repo.getTenantById(tenantId);
+        },
+      );
 
       return response;
     } catch (error) {
@@ -69,10 +72,13 @@ export class TenantService {
 
   async validateTenantExists(tenantId: string): Promise<void> {
     try {
-      const exists = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = tenantRepo(tx);
-        return repo.tenantExistById(tenantId); // Asumiendo que tienes este método
-      });
+      const exists = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = tenantRepo(tx);
+          return repo.tenantExistById(tenantId); // Asumiendo que tienes este método
+        },
+      );
 
       if (!exists) {
         throw new BadRequestException(
@@ -90,10 +96,13 @@ export class TenantService {
   // Actualizar información del tenant
   async updateTenantInfo(body: TenantUpdate, tenantId: string): Promise<any> {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = tenantRepo(tx);
-        return repo.updateTenantInfo(body, tenantId);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = tenantRepo(tx);
+          return repo.updateTenantInfo(body, tenantId);
+        },
+      );
 
       return response;
     } catch (error: any) {
@@ -104,10 +113,13 @@ export class TenantService {
 
   async getTenantStats(tenantId: string): Promise<any> {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = tenantRepo(tx);
-        return repo.getTenantStats(tenantId);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = tenantRepo(tx);
+          return repo.getTenantStats(tenantId);
+        },
+      );
 
       return response;
     } catch (error: any) {

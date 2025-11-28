@@ -16,3 +16,6 @@ export * from './repos/userOwner.repo';
 export * from './repos/userBusiness.repo';
 export * from './repos/user.repo';
 export * from './repos/role.repo';
+
+// Repos de funcionalidad nivel 2
+export * from './repos/mpConfig.repo';

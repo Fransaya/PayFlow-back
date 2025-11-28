@@ -35,10 +35,13 @@ export class UserBusinessService {
 
   async getUsersForBusiness(tenantId: string) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = userBusinessRepo(tx);
-        return repo.getUsersForBusiness(tenantId);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = userBusinessRepo(tx);
+          return repo.getUsersForBusiness(tenantId);
+        },
+      );
 
       return response;
     } catch (error) {
@@ -49,10 +52,13 @@ export class UserBusinessService {
 
   async getSpecificUserBusiness(tenantId: string, userId: string) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = userBusinessRepo(tx);
-        return repo.getSpecificUserBusiness(tenantId, userId);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = userBusinessRepo(tx);
+          return repo.getSpecificUserBusiness(tenantId, userId);
+        },
+      );
 
       return response;
     } catch (error) {
@@ -65,10 +71,13 @@ export class UserBusinessService {
 
   async createUserBusiness(body: CreateUserBusinessDto, tenantId: string) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = userBusinessRepo(tx);
-        return repo.createUserBusiness(body, tenantId);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = userBusinessRepo(tx);
+          return repo.createUserBusiness(body, tenantId);
+        },
+      );
 
       return response;
     } catch (error) {
@@ -83,10 +92,13 @@ export class UserBusinessService {
     userId: string,
   ) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = userBusinessRepo(tx);
-        return repo.updateUserBusiness(body, tenantId, userId);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = userBusinessRepo(tx);
+          return repo.updateUserBusiness(body, tenantId, userId);
+        },
+      );
 
       return response;
     } catch (error) {

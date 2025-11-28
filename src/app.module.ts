@@ -22,10 +22,14 @@ import { UserBusinessModule } from './modules/userBusiness/userBusiness.module';
 import { NotificationModule } from './modules/notifications/notification.module';
 import { RoleModule } from './modules/roles/role.module';
 
+// Modulo de pagos ( funcionalidad de nivel 2)
+import { MercadoPagoModule } from './payments/MercadoPago/mercado-pago.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [authConfig] }),
     MessagingModule,
+    MercadoPagoModule,
     RoleModule,
     NotificationModule,
     AuthModule,

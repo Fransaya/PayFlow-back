@@ -424,7 +424,10 @@ export class AuthService {
 
   async logoutApp(user_decode: UserFromJWT): Promise<any> {
     try {
-      const result = await this.deleteSessionForUser(user_decode.user_id);
+      const result = await this.deleteSessionForUser(
+        user_decode.user_id,
+        user_decode.tenant_id,
+      );
 
       if (!result) {
         throw new BadRequestException('No active session found to logout');
@@ -581,11 +584,14 @@ export class AuthService {
     }
   }
 
-  async deleteSessionForUser(user_id: string): Promise<boolean> {
+  async deleteSessionForUser(
+    user_id: string,
+    tenantId: string,
+  ): Promise<boolean> {
     try {
       console.log('Deleting session for user_id:', user_id);
       const user_auth_info = await this.dbService.runInTransaction(
-        {},
+        { tenantId },
         async (tx) => {
           const repository = authRepo(tx);
           return await repository.getAuthAccountInfoByProviderSub(user_id);
@@ -599,7 +605,7 @@ export class AuthService {
       const user_ref = user_auth_info.user_ref;
 
       const deleteSession = await this.dbService.runInTransaction(
-        {},
+        { tenantId },
         async (tx) => {
           const repository = sessionRepo(tx);
           return await repository.deleteSessionForUser(user_ref);
@@ -631,10 +637,13 @@ export class AuthService {
 
   async saveSession(session_data: SessionAppCreate): Promise<session_app> {
     try {
-      return this.dbService.runInTransaction({}, async (tx) => {
-        const repository = sessionRepo(tx);
-        return await repository.createAppSession(session_data);
-      });
+      return this.dbService.runInTransaction(
+        { tenantId: session_data.tenant_id },
+        async (tx) => {
+          const repository = sessionRepo(tx);
+          return await repository.createAppSession(session_data);
+        },
+      );
     } catch (error) {
       this.logger.error(`Error saving session: ${error}`);
       throw new InternalServerErrorException('Error saving session');
@@ -643,10 +652,13 @@ export class AuthService {
 
   async upsertSession(session_data: any): Promise<session_app> {
     try {
-      return this.dbService.runInTransaction({}, async (tx) => {
-        const repository = sessionRepo(tx);
-        return await repository.upsertSession(session_data);
-      });
+      return this.dbService.runInTransaction(
+        { tenantId: session_data.tenant_id },
+        async (tx) => {
+          const repository = sessionRepo(tx);
+          return await repository.upsertSession(session_data);
+        },
+      );
     } catch (error) {
       this.logger.error(`Error upserting session: ${error}`);
       throw new InternalServerErrorException('Error upserting session');
