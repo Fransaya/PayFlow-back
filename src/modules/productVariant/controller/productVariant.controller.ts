@@ -18,7 +18,7 @@ import { ProductVariantService } from '../services/productVariant.service';
 
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { GoogleTokenGuard } from '@src/guards/google-token.guard';
+import { JwtGuard } from '@src/guards/jwt.guard';
 
 import { ApiTags } from '@nestjs/swagger';
 
@@ -29,7 +29,7 @@ export class ProductVariantController {
   constructor(private readonly productVariantService: ProductVariantService) {}
 
   @Get()
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   async getProductVariants(
@@ -41,7 +41,7 @@ export class ProductVariantController {
   }
 
   @Post('create')
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.CREATED)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -57,7 +57,7 @@ export class ProductVariantController {
       product_id: string;
       name: string;
       sku: string;
-      price: number;
+      price_delta: number;
       stock: number;
       active: boolean;
     },
@@ -66,14 +66,14 @@ export class ProductVariantController {
       product_id: body.product_id,
       name: body.name,
       sku: body.sku,
-      price: body.price,
+      price_delta: body.price_delta,
       stock: body.stock,
       active: body.active,
     });
   }
 
   @Patch('update')
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -89,7 +89,7 @@ export class ProductVariantController {
       product_variant_id: string;
       name?: string;
       sku?: string;
-      price?: number;
+      price_delta?: number;
       stock?: number;
       active?: boolean;
     },
@@ -99,7 +99,7 @@ export class ProductVariantController {
       {
         name: body.name,
         sku: body.sku,
-        price: body.price,
+        price_delta: body.price_delta,
         stock: body.stock,
         active: body.active,
       },
@@ -107,7 +107,7 @@ export class ProductVariantController {
   }
 
   @Delete('delete')
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   async deleteProductVariant(

@@ -120,6 +120,11 @@ export function userRepo(tx: Prisma.TransactionClient) {
         const userBusiness = await tx.user_business.findUnique({
           where: { user_id: authAccount.user_ref },
           include: {
+            user_role: {
+              include: {
+                role: true,
+              },
+            },
             tenants: {
               select: {
                 tenant_id: true,

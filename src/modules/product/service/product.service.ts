@@ -5,12 +5,19 @@ import {
 } from '@nestjs/common';
 
 import { DbService, productRepo } from '@src/libs/db';
+import { StorageService } from '@src/storage/storage.service';
+
+// Interface de producto
+import { Product } from '@src/types/product';
 
 @Injectable()
 export class ProductService {
   private readonly logger = new Logger(ProductService.name);
 
-  constructor(private readonly dbService: DbService) {}
+  constructor(
+    private readonly dbService: DbService,
+    private readonly storageService: StorageService,
+  ) {}
 
   async getProductsByTenant(
     tenantId: string,
@@ -25,10 +32,24 @@ export class ProductService {
     },
   ) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = productRepo(tx);
-        return repo.getProductsByTenant(tenantId, params);
-      });
+      const response: { data: any[]; meta: any } =
+        await this.dbService.runInTransaction({ tenantId }, async (tx) => {
+          const repo = productRepo(tx);
+          return repo.getProductsByTenant(tenantId, params);
+        });
+
+      // Transformar image_url (que es un key) a una URL firmada
+      if (response && response.data) {
+        await Promise.all(
+          response.data.map(async (product: Product) => {
+            if (product.image_url) {
+              product.image_url = await this.storageService.getPresignedGetUrl(
+                product.image_url,
+              );
+            }
+          }),
+        );
+      }
 
       return response;
     } catch (error) {
@@ -39,22 +60,34 @@ export class ProductService {
     }
   }
 
-  async createProduct(data: {
-    tenant_id: string;
-    category_id: string;
-    name: string;
-    description?: string;
-    price: number;
-    currency: string;
-    stock: number;
-    image_url?: string;
-    visible: boolean;
-  }) {
+  async createProduct(
+    data: {
+      category_id: string;
+      name: string;
+      description?: string;
+      price: number;
+      currency: string;
+      stock: number;
+      image_key?: string;
+      visible: boolean;
+    },
+    tenantId: string,
+  ) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = productRepo(tx);
-        return repo.createProduct(data);
-      });
+      // * Desestructuro el image_key para no guardarla en la base de datos
+      const { image_key, ...restData } = data;
+
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = productRepo(tx);
+          return repo.createProduct({
+            ...restData,
+            tenant_id: tenantId,
+            image_url: image_key || '',
+          });
+        },
+      );
 
       return response;
     } catch (error) {
@@ -69,14 +102,29 @@ export class ProductService {
       name?: string;
       description?: string;
       price?: number;
-      active?: boolean;
+      currency?: string;
+      stock?: number;
+      image_key?: string;
+      visible?: boolean;
     },
+    tenantId: string,
   ) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = productRepo(tx);
-        return repo.updateProduct(product_id, data);
-      });
+      // * Desestructuro el image_key para no guardarla en la base de datos
+      console.log('product to update', data);
+      const { image_key, ...restData } = data;
+
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = productRepo(tx);
+          return repo.updateProduct(
+            product_id,
+            { ...restData, image_url: image_key || '' },
+            tenantId,
+          );
+        },
+      );
 
       return response;
     } catch (error) {
@@ -85,12 +133,15 @@ export class ProductService {
     }
   }
 
-  async deleteProduct(product_id: string) {
+  async deleteProduct(product_id: string, tenantId: string, visible: boolean) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = productRepo(tx);
-        return repo.deleteProduct(product_id);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = productRepo(tx);
+          return repo.deleteProduct(product_id, tenantId, visible);
+        },
+      );
 
       return response;
     } catch (error) {

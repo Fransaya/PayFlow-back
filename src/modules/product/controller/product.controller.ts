@@ -1,8 +1,7 @@
 import {
   Get,
   Post,
-  Delete,
-  Patch,
+  Put,
   Body,
   HttpCode,
   HttpStatus,
@@ -12,28 +11,60 @@ import {
   UseGuards,
   UseFilters,
   Controller,
+  HttpException,
+  ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { GoogleTokenGuard } from '@src/guards/google-token.guard';
+import { JwtGuard } from '@src/guards/jwt.guard';
 
 import { ApiTags } from '@nestjs/swagger';
 
 import { ProductService } from '../service/product.service';
+import { StorageService } from '@src/storage/storage.service';
+
+import { CurrentUser } from '@src/common/decorators/extractUser.decorator';
+
+import { UserFromJWT } from '@src/types/userFromJWT';
 
 @ApiTags('Product')
 @Controller('product')
 @UseFilters(HttpExceptionFilter)
 export class ProductController {
-  constructor(private readonly productService: ProductService) {}
+  constructor(
+    private readonly productService: ProductService,
+    private readonly storageService: StorageService,
+  ) {}
+
+  @Get('upload-url')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseFilters(HttpExceptionFilter)
+  async getUploadUrl(@CurrentUser() user: UserFromJWT): Promise<any> {
+    try {
+      const { url, key } = await this.storageService.getPresignedUrl(
+        user.tenant_id,
+        'image/jpeg',
+        'products',
+      );
+      return {
+        uploadUrl: url,
+        imageKey: key,
+        expiresIn: 300,
+      };
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 
   @Get()
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   async getProductsByTenant(
-    @Query('tenantId') tenant_id: string,
+    @CurrentUser() user: UserFromJWT,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
@@ -42,7 +73,7 @@ export class ProductController {
     @Query('sort_by') sort_by?: string,
     @Query('order') order?: string,
   ): Promise<any> {
-    return await this.productService.getProductsByTenant(tenant_id, {
+    return await this.productService.getProductsByTenant(user.tenant_id, {
       page,
       limit,
       search,
@@ -54,7 +85,7 @@ export class ProductController {
   }
 
   @Post('create')
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.CREATED)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -67,22 +98,35 @@ export class ProductController {
   async createProduct(
     @Body()
     body: {
-      tenant_id: string;
       category_id: string;
       name: string;
       description?: string;
       price: number;
       currency: string;
       stock: number;
-      image_url?: string;
+      image_key: string;
       visible: boolean;
     },
+    @CurrentUser() user: UserFromJWT,
   ): Promise<any> {
-    return await this.productService.createProduct(body);
+    const imageExists = await this.storageService.validateObjectExists(
+      body.image_key,
+    );
+
+    if (!imageExists) {
+      throw new BadRequestException('Image upload failed or image not found.');
+    }
+
+    // Validar que el Key pertenezca al Tenant (evitar que tenant A use imagenes de tenant B)
+    if (!body.image_key.startsWith(`${user.tenant_id}/`)) {
+      throw new ForbiddenException('Invalid image access.');
+    }
+
+    return await this.productService.createProduct(body, user.tenant_id);
   }
 
-  @Patch('update')
-  @UseGuards(GoogleTokenGuard)
+  @Put('update')
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -102,18 +146,31 @@ export class ProductController {
       price?: number;
       currency?: string;
       stock?: number;
-      image_url?: string;
+      image_key?: string;
       visible?: boolean;
     },
+    @CurrentUser() user: UserFromJWT,
   ): Promise<any> {
-    return await this.productService.updateProduct(product_id, body);
+    return await this.productService.updateProduct(
+      product_id,
+      body,
+      user.tenant_id,
+    );
   }
 
-  @Delete('delete')
-  @UseGuards(GoogleTokenGuard)
+  @Put('delete')
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
-  async deleteProduct(@Query('productId') product_id: string): Promise<any> {
-    return await this.productService.deleteProduct(product_id);
+  async deleteProduct(
+    @Query('productId') product_id: string,
+    @CurrentUser() user: UserFromJWT,
+    @Body('visible') visible: boolean,
+  ): Promise<any> {
+    return await this.productService.deleteProduct(
+      product_id,
+      user.tenant_id,
+      visible,
+    );
   }
 }

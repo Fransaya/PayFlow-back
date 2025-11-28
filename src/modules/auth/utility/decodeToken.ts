@@ -13,3 +13,9 @@ export function decodeToken(token: string): { [key: string]: any } {
     throw new Error('Invalid token');
   }
 }
+
+export function decodeTokenGoogle(token: string): { [key: string]: any } {
+  const decoded = jsonwebtoken.decode(token, { complete: true });
+  console.log('Decoded Google Token in decodeTokenGoogle:', decoded);
+  return decoded as { [key: string]: any };
+}

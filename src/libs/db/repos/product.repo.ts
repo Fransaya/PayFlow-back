@@ -108,16 +108,22 @@ export function productRepo(tx: Prisma.TransactionClient) {
         image_url?: string;
         visible?: boolean;
       },
+      tenant_id: string,
     ) {
       return tx.product.update({
-        where: { product_id },
+        where: { product_id, tenant_id },
         data,
       });
     },
 
-    async deleteProduct(product_id: string) {
-      return tx.product.delete({
-        where: { product_id },
+    async deleteProduct(
+      product_id: string,
+      tenant_id: string,
+      visible: boolean,
+    ) {
+      return tx.product.update({
+        where: { product_id, tenant_id },
+        data: { visible },
       });
     },
   };

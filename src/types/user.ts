@@ -36,6 +36,7 @@ export interface UserBusinessDetails {
   status: string | null;
   created_at: Date | null;
   tenants: TenantInfo;
+  user_role: any;
 }
 
 // Tipo de retorno cuando el usuario es OWNER
@@ -68,6 +69,7 @@ export interface GoogleUserInfo {
 
 // Sesión de la aplicación interna
 export interface AppSessionData {
+  user_type: 'OWNER' | 'BUSINESS';
   access_token: string;
   refresh_token: string;
   token_type: string;

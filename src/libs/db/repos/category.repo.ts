@@ -8,14 +8,20 @@ export function categoryRepo(tx: Prisma.TransactionClient) {
       });
     },
 
-    async createCategory(data: {
-      tenant_id: string;
-      name: string;
-      description?: string;
-      active: boolean;
-    }) {
+    async createCategory(
+      data: {
+        tenant_id: string;
+        name: string;
+        description?: string;
+        active: boolean;
+      },
+      tenantId: string,
+    ) {
       return tx.category.create({
-        data,
+        data: {
+          ...data,
+          tenant_id: tenantId,
+        },
       });
     },
 
@@ -25,6 +31,7 @@ export function categoryRepo(tx: Prisma.TransactionClient) {
         name?: string;
         description?: string;
         active?: boolean;
+        image_key?: string;
       },
     ) {
       return tx.category.update({
@@ -33,9 +40,10 @@ export function categoryRepo(tx: Prisma.TransactionClient) {
       });
     },
 
-    // TODO: ver que eliminaria a nivel de integridad referencial
-    async deleteCategory(category_id: string) {
-      return tx.category.delete({
+    //* esto cambiaria el estado unicamente
+    async deleteCategory(category_id: string, active: boolean) {
+      return tx.category.update({
+        data: { active },
         where: { category_id },
       });
     },

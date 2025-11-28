@@ -30,7 +30,7 @@ export class ProductVariantService {
     product_id: string;
     name: string;
     sku: string;
-    price: number;
+    price_delta: number;
     stock: number;
     active: boolean;
   }) {
@@ -52,7 +52,7 @@ export class ProductVariantService {
     data: {
       name?: string;
       sku?: string;
-      price?: number;
+      price_delta?: number;
       stock?: number;
       active?: boolean;
     },

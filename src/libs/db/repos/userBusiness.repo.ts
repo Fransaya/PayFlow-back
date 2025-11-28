@@ -62,5 +62,40 @@ export function userBusinessRepo(tx: Prisma.TransactionClient) {
         data: body,
       });
     },
+    // FUNCIONALIDAD DE ROLES ASOCIADOS A USUARIOS BUSINESS
+    //* Metodo de asignar rol a usuario business
+    async assignRoleToUserBusiness(userId: string, roleId: string) {
+      return tx.user_role.create({
+        data: {
+          user_id: userId,
+          role_id: roleId,
+        },
+        select: {
+          role: true,
+        },
+      });
+    },
+
+    //* Metodo para eliminar rol de usuario business */
+    async removeRoleFromUserBusiness(userId: string, roleId: string) {
+      return tx.user_role.deleteMany({
+        where: {
+          user_id: userId,
+          role_id: roleId,
+        },
+      });
+    },
+
+    //* Metodo para obtener roles de un usuario business */
+    async getRolesOfUserBusiness(userId: string) {
+      return tx.user_role.findMany({
+        where: {
+          user_id: userId,
+        },
+        include: {
+          role: true,
+        },
+      });
+    },
   };
 }

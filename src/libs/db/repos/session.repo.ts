@@ -55,6 +55,7 @@ export function sessionRepo(tx: Prisma.TransactionClient) {
 
     async deleteSessionForUser(user_id: string): Promise<boolean> {
       if (!user_id?.trim()) throw new Error('User ID is required');
+      console.log('Deleting sessions for user_id:', user_id);
 
       const session = await tx.session_app.deleteMany({
         where: {
@@ -64,6 +65,8 @@ export function sessionRepo(tx: Prisma.TransactionClient) {
           ],
         },
       });
+
+      console.log('Deleted sessions count:', session.count);
       return Boolean(session);
     },
 

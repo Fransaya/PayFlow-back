@@ -1,45 +1,70 @@
 import {
   Get,
   Post,
-  Delete,
-  Patch,
   Body,
   HttpCode,
   HttpStatus,
   UsePipes,
   ValidationPipe,
-  Query,
   UseGuards,
   UseFilters,
   Controller,
+  Put,
+  HttpException,
 } from '@nestjs/common';
 
 import { HttpExceptionFilter } from '../../../common/filters/http-exception.filter';
 
-import { GoogleTokenGuard } from '@src/guards/google-token.guard';
+import { JwtGuard } from '@src/guards/jwt.guard';
 
 import { ApiTags } from '@nestjs/swagger';
 
 import { CategoryService } from '../service/category.service';
+import { StorageService } from '@src/storage/storage.service';
+import { CurrentUser } from '@src/common/decorators/extractUser.decorator';
+import { UserFromJWT } from '@src/types/userFromJWT';
 
 @ApiTags('Category')
 @Controller('category')
 @UseFilters(HttpExceptionFilter)
 export class CategoryController {
-  constructor(private readonly categoryService: CategoryService) {}
+  constructor(
+    private readonly categoryService: CategoryService,
+    private readonly storageService: StorageService,
+  ) {}
 
-  @Get()
-  @UseGuards(GoogleTokenGuard)
+  @Get('upload-url')
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
-  async getCategoriesByTenant(
-    @Query('tenantId') tenantId: string,
-  ): Promise<any> {
+  async getUploadUrl(@CurrentUser() user: UserFromJWT): Promise<any> {
+    try {
+      const { url, key } = await this.storageService.getPresignedUrl(
+        user.tenant_id,
+        'image/jpeg',
+        'categories',
+      );
+      return {
+        uploadUrl: url,
+        imageKey: key,
+        expiresIn: 300,
+      };
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get()
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseFilters(HttpExceptionFilter)
+  async getCategoriesByTenant(@CurrentUser() user: UserFromJWT): Promise<any> {
+    const tenantId = user.tenant_id;
     return await this.categoryService.getCategoriesByTenant(tenantId);
   }
 
   @Post('create')
-  @UseGuards(GoogleTokenGuard)
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.CREATED)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -56,12 +81,15 @@ export class CategoryController {
       name: string;
       description?: string;
       active: boolean;
+      image_key?: string;
     },
+    @CurrentUser() user: UserFromJWT,
   ): Promise<any> {
-    return await this.categoryService.createCategory(body);
+    const tenantId = user.tenant_id;
+    return await this.categoryService.createCategory(body, tenantId);
   }
-  @Patch('update')
-  @UseGuards(GoogleTokenGuard)
+  @Put('update')
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
   @UsePipes(
@@ -72,22 +100,33 @@ export class CategoryController {
     }),
   )
   async updateCategory(
-    @Query('categoryId') category_id: string,
     @Body()
     body: {
+      category_id: string;
       name?: string;
       description?: string;
       active?: boolean;
+      image_key?: string;
     },
+    @CurrentUser() user: UserFromJWT,
   ): Promise<any> {
-    return await this.categoryService.updateCategory(category_id, body);
+    const tenantId = user.tenant_id;
+    return await this.categoryService.updateCategory(body, tenantId);
   }
 
-  @Delete('delete')
-  @UseGuards(GoogleTokenGuard)
+  @Put('status')
+  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @UseFilters(HttpExceptionFilter)
-  async deleteCategory(@Query('categoryId') category_id: string): Promise<any> {
-    return await this.categoryService.deleteCategory(category_id);
+  async deleteCategory(
+    @Body()
+    body: {
+      category_id: string;
+      active: boolean;
+    },
+    @CurrentUser() user: UserFromJWT,
+  ): Promise<any> {
+    const tenantId = user.tenant_id;
+    return await this.categoryService.deleteCategory(body, tenantId);
   }
 }

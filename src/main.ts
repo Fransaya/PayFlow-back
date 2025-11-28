@@ -7,8 +7,11 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { VersioningType } from '@nestjs/common';
 
+import cookieParser from 'cookie-parser';
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(cookieParser());
   const configServive = app.get(ConfigService);
   // const prismaService = app.get(PrismaService);
   // await prismaService.enableShutdownHooks(app);
@@ -42,6 +45,7 @@ async function bootstrap() {
       'Authorization',
       'X-Requested-With',
       'x-oauth-token',
+      'x-google-token',
     ], // Headers permitidos
   });
 

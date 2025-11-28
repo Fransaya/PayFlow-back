@@ -80,6 +80,7 @@ model category {
   name        String
   description String?
   active      Boolean?  @default(true)
+  image_key   String?
   tenant      tenant    @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "categories_tenant_id_fkey")
   product     product[]
 }
@@ -164,6 +165,7 @@ model product_variant {
   price_delta Decimal?     @default(0) @db.Decimal(12, 2)
   sku         String?
   stock       Int?         @default(0)
+  active      Boolean?     @default(true)
   order_item  order_item[]
   product     product      @relation(fields: [product_id], references: [product_id], onDelete: Cascade, onUpdate: NoAction, map: "product_variants_product_id_fkey")
 }

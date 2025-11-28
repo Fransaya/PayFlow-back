@@ -66,6 +66,9 @@ export class RoleController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseFilters(HttpExceptionFilter)
   async updateRole(
     @Param('id') id: string,
     @Body() updateRoleDto: UpdateRoleDto,

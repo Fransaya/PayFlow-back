@@ -19,7 +19,7 @@ export class UserBusinessService {
 
   async getUserBusinessBasicInfo(userId: string) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx)=> {
+      const response = await this.dbService.runInTransaction({}, async (tx) => {
         const repo = userBusinessRepo(tx);
         return repo.getUserBusinessBasicInfo(userId);
       });
@@ -27,7 +27,9 @@ export class UserBusinessService {
       return response;
     } catch (error) {
       this.logger.error(`Error getting user business basic info: ${error}`);
-      throw new InternalServerErrorException('Error getting user business basic info');
+      throw new InternalServerErrorException(
+        'Error getting user business basic info',
+      );
     }
   }
 
@@ -90,6 +92,64 @@ export class UserBusinessService {
     } catch (error) {
       this.logger.error(`Error updating user business: ${error}`);
       throw new InternalServerErrorException('Error updating user business');
+    }
+  }
+
+  // FUNCIONALIDADES ASOCIADAS A ROLES DE USUARIOS
+  async assingRole(userId: string, roleId: string, tenantId: string) {
+    try {
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = userBusinessRepo(tx);
+          return repo.assignRoleToUserBusiness(userId, roleId);
+        },
+      );
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error assigning role to user: ${error}`);
+      throw new InternalServerErrorException('Error assigning role to user');
+    }
+  }
+
+  async removeRole(userId: string, roleId: string, tenantId: string) {
+    try {
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = userBusinessRepo(tx);
+          return repo.removeRoleFromUserBusiness(userId, roleId);
+        },
+      );
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error removing role from user: ${error}`);
+      throw new InternalServerErrorException('Error removing role from user');
+    }
+  }
+
+  async getUserRoles(userId: string, tenantId: string) {
+    try {
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          return tx.user_role.findMany({
+            where: {
+              user_id: userId,
+            },
+            select: {
+              role: true,
+            },
+          });
+        },
+      );
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error getting user roles: ${error}`);
+      throw new InternalServerErrorException('Error getting user roles');
     }
   }
 }

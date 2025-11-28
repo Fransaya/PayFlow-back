@@ -37,12 +37,13 @@ import {
 
 import { IdTokenPayload } from '@src/types/idTokenPayload';
 import { InviteToken } from '@src/types/inviteToken';
+import { GoogleRefreshTokenResponse } from '@src/types/googleToken';
 
 // Funciones de utilidad
 import { validateInviteToken } from '../utility/validateInviteToken';
 import { validateInviteTokenEmail } from '../utility/validateInviteTokenEmail';
 import { validateOwnerRegistrationData } from '../utility/validateOwnerRegistrationData';
-import { decodeToken } from '../utility/decodeToken';
+import { decodeToken, decodeTokenGoogle } from '../utility/decodeToken';
 
 // Metodo de user.service
 import { UserService } from '@src/modules/user/service/user.service';
@@ -51,6 +52,7 @@ import { TenantService } from '@src/modules/tenant/service/tenant.service';
 // Utilidad para generacion de token
 import { generateToken } from '../utility/generateToken';
 import { hashPassword } from '../utility/hashPassword';
+import { UserFromJWT } from '@src/types/userFromJWT';
 
 @Injectable()
 export class AuthService {
@@ -161,6 +163,7 @@ export class AuthService {
         redirect_to: '/register',
       };
     } catch (error: any) {
+      console.log('error', error);
       this.logger.error(`Failed to handle auth callback: ${error}`);
 
       if (error.response && error.response.data) {
@@ -246,6 +249,7 @@ export class AuthService {
           user_id: userData.user_ref,
           tenant_id: user_details.tenants.tenant_id,
           provider: userData.provider,
+          user_type: userData.user_type,
         },
         userData,
         this.config.jwt.expiresIn,
@@ -256,6 +260,7 @@ export class AuthService {
           user_id: userData.user_ref,
           tenant_id: user_details.tenants.tenant_id,
           provider: userData.provider,
+          user_type: userData.user_type,
         },
         userData,
         this.config.jwt.refreshExpiresIn,
@@ -281,6 +286,7 @@ export class AuthService {
       return {
         description: 'Login successful',
         data: {
+          user_type: userData.user_type,
           access_token,
           refresh_token,
           token_type: 'Bearer',
@@ -332,6 +338,10 @@ export class AuthService {
 
       const { user_details } = userData;
 
+      if ('user_role' in user_details) {
+        console.log('userData', user_details.user_role);
+      }
+
       if (!userData) {
         throw new UnauthorizedException('User not found');
       }
@@ -357,6 +367,8 @@ export class AuthService {
           user_id: userData.user_ref,
           tenant_id: user_details.tenants.tenant_id,
           provider: userData.provider,
+          user_type: userData.user_type,
+          roles: 'user_role' in user_details ? user_details.user_role : null,
         },
         userData,
         this.config.jwt.expiresIn,
@@ -367,6 +379,8 @@ export class AuthService {
           user_id: userData.user_ref,
           tenant_id: user_details.tenants.tenant_id,
           provider: userData.provider,
+          user_type: userData.user_type,
+          roles: 'user_role' in user_details ? user_details.user_role : null,
         },
         userData,
         this.config.jwt.refreshExpiresIn,
@@ -392,6 +406,7 @@ export class AuthService {
       return {
         description: 'Login successful',
         data: {
+          user_type: userData.user_type,
           access_token,
           refresh_token,
           token_type: 'Bearer',
@@ -407,9 +422,9 @@ export class AuthService {
     }
   }
 
-  async logoutApp(user_decode: IdTokenPayload): Promise<any> {
+  async logoutApp(user_decode: UserFromJWT): Promise<any> {
     try {
-      const result = await this.deleteSessionForUser(user_decode.sub);
+      const result = await this.deleteSessionForUser(user_decode.user_id);
 
       if (!result) {
         throw new BadRequestException('No active session found to logout');
@@ -417,7 +432,7 @@ export class AuthService {
 
       return {
         description: 'Logout successful',
-        data: null,
+        data: result,
       };
     } catch (error) {
       this.logger.error(`Failed to logout: ${error}`);
@@ -431,6 +446,126 @@ export class AuthService {
       }
 
       throw new InternalServerErrorException('An error occurred during logout');
+    }
+  }
+
+  async refreshSession(
+    user_decode_app: UserFromJWT,
+    user_decode_google?: UserFromJWT,
+    refresh_token_goole?: string,
+  ): Promise<any> {
+    try {
+      let newSessionGoogle: any = null;
+      if (refresh_token_goole) {
+        const responseRefreshGoogle =
+          await axios.post<GoogleRefreshTokenResponse>(
+            'https://oauth2.googleapis.com/token',
+            {
+              client_id: process.env.GOOGLE_CLIENT_ID,
+              client_secret: process.env.GOOGLE_CLIENT_SECRET,
+              refresh_token: refresh_token_goole,
+              grant_type: 'refresh_token',
+            },
+          );
+
+        // Obtengo nuevos tokens de google
+        const { access_token, id_token, expires_in } =
+          responseRefreshGoogle.data;
+
+        newSessionGoogle = {
+          access_token,
+          id_token,
+          expires_in,
+        };
+      }
+
+      const userData: GetUserByEmailResponse =
+        await this.userService.getUserByEmail(user_decode_app.email);
+
+      if (!userData) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Validar que tenga user_details
+      if (!('user_details' in userData) || !userData.user_details) {
+        throw new UnauthorizedException('User details not found');
+      }
+
+      // Validar que tenga provider
+      if (!userData.provider) {
+        throw new UnauthorizedException('User provider not found');
+      }
+
+      const { user_details } = userData;
+
+      // Genero token de access_token de aplicacion y refresh token internos para la aplicacion ( session )
+      const access_token_app: string = generateToken(
+        {
+          user_id: userData.user_ref,
+          tenant_id: user_details.tenants.tenant_id,
+          provider: userData.provider,
+          user_type: userData.user_type,
+        },
+        userData,
+        this.config.jwt.expiresIn,
+      );
+
+      const refresh_token_app: string = generateToken(
+        {
+          user_id: userData.user_ref,
+          tenant_id: user_details.tenants.tenant_id,
+          provider: userData.provider,
+          user_type: userData.user_type,
+        },
+        userData,
+        this.config.jwt.refreshExpiresIn,
+      );
+
+      const sessionData: SessionAppCreate = {
+        ...(userData.user_type === USER_TYPE.OWNER && {
+          user_owner_id: userData.user_ref,
+        }),
+        ...(userData.user_type === USER_TYPE.BUSINESS && {
+          user_id: userData.user_ref,
+        }),
+        tenant_id: user_details.tenants.tenant_id,
+        provider:
+          userData.user_type == USER_TYPE.OWNER
+            ? PROVIDER.GOOGLE
+            : PROVIDER.LOCAL,
+        refresh_token_enc: refresh_token_app,
+        refresh_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      };
+
+      const session = await this.upsertSession(sessionData);
+
+      return {
+        description: 'Refresh successful',
+        data: {
+          user_type: userData.user_type,
+          access_token_app,
+          refresh_token_app,
+          access_token_google: newSessionGoogle.access_token,
+          id_token_google: newSessionGoogle.id_token,
+          token_type: 'Bearer',
+          expires_in: this.config.jwt.expiresIn,
+          session,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to refresh session: ${error}`);
+
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'An error occurred during session refresh',
+      );
     }
   }
 
@@ -448,10 +583,34 @@ export class AuthService {
 
   async deleteSessionForUser(user_id: string): Promise<boolean> {
     try {
-      return this.dbService.runInTransaction({}, async (tx) => {
-        const repository = sessionRepo(tx);
-        return await repository.deleteSessionForUser(user_id);
-      });
+      console.log('Deleting session for user_id:', user_id);
+      const user_auth_info = await this.dbService.runInTransaction(
+        {},
+        async (tx) => {
+          const repository = authRepo(tx);
+          return await repository.getAuthAccountInfoByProviderSub(user_id);
+        },
+      );
+
+      if (!user_auth_info) {
+        throw new BadRequestException('User auth account not found');
+      }
+      console.log('user_auth_info', user_auth_info);
+      const user_ref = user_auth_info.user_ref;
+
+      const deleteSession = await this.dbService.runInTransaction(
+        {},
+        async (tx) => {
+          const repository = sessionRepo(tx);
+          return await repository.deleteSessionForUser(user_ref);
+        },
+      );
+
+      if (!deleteSession) {
+        return false;
+      }
+
+      return true;
     } catch (error) {
       this.logger.error(`Error deleting session for user ${user_id}: ${error}`);
       throw new InternalServerErrorException('Error deleting session for user');

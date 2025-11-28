@@ -12,7 +12,7 @@ export function productVariantRepo(tx: Prisma.TransactionClient) {
       product_id: string;
       name: string;
       sku: string;
-      price: number;
+      price_delta: number;
       stock: number;
       active: boolean;
     }) {
@@ -26,7 +26,7 @@ export function productVariantRepo(tx: Prisma.TransactionClient) {
       data: {
         name?: string;
         sku?: string;
-        price?: number;
+        price_delta?: number;
         stock?: number;
         active?: boolean;
       },

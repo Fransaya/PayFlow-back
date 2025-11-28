@@ -3,6 +3,19 @@ import { Prisma } from '@prisma/client';
 
 export function authRepo(tx: Prisma.TransactionClient) {
   return {
+    async getAuthAccountInfoByProviderSub(provider_sub: string) {
+      return tx.auth_account.findFirst({
+        where: { provider_sub },
+        select: {
+          account_id: true,
+          user_type: true,
+          user_ref: true,
+          provider_sub: true,
+          email: true,
+        },
+      });
+    },
+
     async createOwnerWithTransaction(
       tenant_data: { name: string; slug: string },
       user_data: { name: string; email: string; phone: string },

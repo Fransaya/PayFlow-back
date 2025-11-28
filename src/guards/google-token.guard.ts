@@ -17,7 +17,7 @@ export class GoogleTokenGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
 
     // 1. Leer header personalizado
-    const authHeader: string = request.headers['x-oauth-token'] as string;
+    const authHeader: string = request.headers['x-google-token'] as string;
     if (!authHeader) {
       throw new BadRequestException('Authorization header is required');
     }

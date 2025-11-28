@@ -42,7 +42,7 @@ export class EmailService {
       if (!html) {
         throw new Error('Debe proporcionar HTML o un template');
       }
-
+      //TODO: ver porque aca cuando invito luego de crear el usuario no envia el correo. (revisar)
       const resendClient = ResendProvider.useValue;
       const response: any = await resendClient.emails.send({
         from: process.env.EMAIL_FROM || 'pedilo@sayasoft.com.ar',
@@ -56,6 +56,7 @@ export class EmailService {
         `Email sent to ${options.to}: ${JSON.stringify(response)}`,
       );
     } catch (error) {
+      console.log('error in email service', error);
       this.logger.error(`Failed to send email to ${options.to}`, error);
       throw error;
     }

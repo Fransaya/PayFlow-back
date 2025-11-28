@@ -6,11 +6,19 @@ import {
 
 import { DbService, categoryRepo } from '@src/libs/db';
 
+import { StorageService } from '@src/storage/storage.service';
+
+// eslint-disable-next-line import/no-unresolved
+import { Category } from '@src/types/category';
+
 @Injectable()
 export class CategoryService {
   private readonly logger = new Logger(CategoryService.name);
 
-  constructor(private readonly dbService: DbService) {}
+  constructor(
+    private readonly dbService: DbService,
+    private readonly storageService: StorageService,
+  ) {}
 
   async getCategoriesByTenant(tenantId: string) {
     try {
@@ -18,6 +26,19 @@ export class CategoryService {
         const repo = categoryRepo(tx);
         return repo.getCategoryByTenant(tenantId);
       });
+
+      // Transformar image_url (que es un key) a una URL firmada
+      if (response) {
+        await Promise.all(
+          response.map(async (category: Category) => {
+            if (category.image_key) {
+              category.image_key = await this.storageService.getPresignedGetUrl(
+                category.image_key,
+              );
+            }
+          }),
+        );
+      }
 
       return response;
     } catch (error) {
@@ -28,17 +49,24 @@ export class CategoryService {
     }
   }
 
-  async createCategory(data: {
-    tenant_id: string;
-    name: string;
-    description?: string;
-    active: boolean;
-  }) {
+  async createCategory(
+    data: {
+      tenant_id: string;
+      name: string;
+      description?: string;
+      active: boolean;
+      image_key?: string;
+    },
+    tenantId: string,
+  ) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = categoryRepo(tx);
-        return repo.createCategory(data);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = categoryRepo(tx);
+          return repo.createCategory(data, tenantId);
+        },
+      );
 
       return response;
     } catch (error) {
@@ -48,18 +76,23 @@ export class CategoryService {
   }
 
   async updateCategory(
-    category_id: string,
-    data: {
+    body: {
+      category_id: string;
       name?: string;
       description?: string;
       active?: boolean;
+      image_key?: string;
     },
+    tenantId: string,
   ) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = categoryRepo(tx);
-        return repo.updateCategory(category_id, data);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = categoryRepo(tx);
+          return repo.updateCategory(body.category_id, body);
+        },
+      );
 
       return response;
     } catch (error) {
@@ -68,12 +101,18 @@ export class CategoryService {
     }
   }
 
-  async deleteCategory(category_id: string) {
+  async deleteCategory(
+    body: { category_id: string; active: boolean },
+    tenantId: string,
+  ) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = categoryRepo(tx);
-        return repo.deleteCategory(category_id);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = categoryRepo(tx);
+          return repo.deleteCategory(body.category_id, body.active);
+        },
+      );
 
       return response;
     } catch (error) {
