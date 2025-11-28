@@ -68,4 +68,13 @@ export class TenantController {
     }
     return await this.tenantService.updateTenantInfo(body, tenantId);
   }
+
+  @Get('stats')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseFilters(HttpExceptionFilter)
+  async getTenantStats(@CurrentUser() user: any): Promise<any> {
+    const tenantId = user.tenant_id;
+    return await this.tenantService.getTenantStats(tenantId);
+  }
 }

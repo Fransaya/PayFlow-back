@@ -35,14 +35,18 @@ model business {
 }
 
 model mp_config {
-  mp_config_id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id            String    @db.Uuid
-  mp_user_id           String?
-  mp_access_token_enc  String?
-  mp_refresh_token_enc String?
-  mp_token_expiry      DateTime? @db.Timestamptz(6)
-  created_at           DateTime? @default(now()) @db.Timestamptz(6)
-  tenants              tenant    @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
+  mp_config_id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id              String    @db.Uuid @unique // CRÍTICO: Un solo config por tenant
+  mp_user_id             String?   // Collector ID (user_id) del negocio en MP
+  mp_access_token_enc    String?   // Access Token Cifrado
+  mp_refresh_token_enc   String?   // Refresh Token Cifrado
+  mp_token_expiry        DateTime? @db.Timestamptz(6) // Fecha de expiración del access token
+  created_at             DateTime  @default(now()) @db.Timestamptz(6)
+
+  // Relación con el Tenant. Se cambia 'tenants' a 'tenant' para claridad.
+  tenant                 tenant    @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "mp_config_tenant_id_fkey")
+
+  @@map("mp_config")
 }
 
 model user_business {
@@ -86,23 +90,27 @@ model category {
 }
 
 model order {
-  order_id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id            String       @db.Uuid
-  customer_id          String?      @db.Uuid
-  source_channel       String?
-  status               String?      @default("draft")
-  total_amount         Decimal?     @default(0) @db.Decimal(12, 2)
-  currency             String?      @default("ARS")
-  cart_json            Json?
-  mp_preference_id     String?
-  mp_merchant_order_id String?
-  created_at           DateTime?    @default(now()) @db.Timestamptz(6)
-  tenant               tenant       @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "orders_tenant_id_fkey")
-  order_item           order_item[]
-  payment              payment[]
+  order_id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id              String    @db.Uuid
+  source_channel         String?   // WhatsApp, IG, Telegram, Web
+  status                 String    @default("draft") // Se hizo no nulo, siempre debe tener un estado
+  total_amount           Decimal   @default(0) @db.Decimal(12, 2) // Se hizo no nulo
+  currency               String    @default("ARS")
+  cart_json              Json?     // Snapshot opcional de los items del carrito para auditoría
+  mp_preference_id       String?   // ID generado por MP al crear la preferencia
+  mp_merchant_order_id   String?   // ID de Merchant Order de MP
+  created_at             DateTime  @default(now()) @db.Timestamptz(6)
 
+  // Relaciones
+  tenant                 tenant    @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "orders_tenant_id_fkey")
+  order_item             order_item[]
+  payment                payment[]
+
+  // Índices para optimización y RLS
+  @@index([tenant_id], map: "idx_orders_tenant_lookup")
   @@index([status], map: "idx_orders_status")
-  @@index([tenant_id], map: "idx_orders_tenant")
+  @@index([tenant_id, created_at], map: "idx_orders_tenant_created_at_query") // Esencial para el listado del dashboard
+  @@index([tenant_id, status], map: "idx_orders_tenant_status_query") // Útil para filtrar pedidos activos de un tenant
 }
 
 model order_item {
@@ -132,8 +140,9 @@ model payment {
   order         order     @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction, map: "payments_order_id_fkey")
   tenant        tenant    @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "payments_tenant_id_fkey")
 
-  @@index([mp_payment_id], map: "idx_payments_mp_payment")
+  @@unique([mp_payment_id], map: "uq_payments_mp_payment_id") // Único para evitar duplicidad
   @@index([order_id], map: "idx_payments_order")
+  @@index([tenant_id, order_id], map: "idx_payments_tenant_order_query") // Búsqueda de pagos de un pedido específico dentro del tenant
 }
 
 model product {

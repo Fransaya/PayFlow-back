@@ -101,4 +101,18 @@ export class TenantService {
       throw new InternalServerErrorException('Error updating tenant info');
     }
   }
+
+  async getTenantStats(tenantId: string): Promise<any> {
+    try {
+      const response = await this.dbService.runInTransaction({}, async (tx) => {
+        const repo = tenantRepo(tx);
+        return repo.getTenantStats(tenantId);
+      });
+
+      return response;
+    } catch (error: any) {
+      this.logger.error(`Error getting tenant stats: ${error}`);
+      throw new InternalServerErrorException('Error getting tenant stats');
+    }
+  }
 }
