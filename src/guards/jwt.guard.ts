@@ -5,8 +5,8 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AuthService } from '@src/modules/auth/service/auth.service';
-import { GoogleTokenService } from '@src/modules/auth/service/google-token.service';
+import { AuthService } from '@src/modules/auth/services/auth.service';
+import { GoogleTokenService } from '@src/modules/auth/services/google-token.service';
 
 @Injectable()
 export class JwtGuard implements CanActivate {
@@ -21,6 +21,8 @@ export class JwtGuard implements CanActivate {
     // 1. Leer header Authorization o Cookie
     const authHeader: string = request.headers['authorization'];
     let token: string | undefined;
+
+    // console.log('request', request);
 
     if (authHeader) {
       const [scheme, t] = authHeader.split(' ');

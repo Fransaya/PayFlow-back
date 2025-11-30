@@ -1,13 +1,14 @@
-import { Module } from '@nestjs/common';
-import { AuthService } from './service/auth.service';
-import { AuthController } from './controller/auth.controller';
-import { GoogleTokenService } from './service/google-token.service';
-import { UserService } from '../user/service/user.service';
-import { TenantService } from '../tenant/service/tenant.service';
+import { Module, forwardRef } from '@nestjs/common';
+import { AuthService } from './services/auth.service';
+import { AuthController } from './controllers/auth.controller';
+import { GoogleTokenService } from './services/google-token.service';
+import { UserService } from '../users/services/user.service';
+import { TenantModule } from '../tenants/tenant.module';
 
 @Module({
+  imports: [forwardRef(() => TenantModule)],
   controllers: [AuthController],
-  providers: [AuthService, GoogleTokenService, UserService, TenantService],
+  providers: [AuthService, GoogleTokenService, UserService],
   exports: [AuthService], // Exportar AuthService para que otros módulos puedan usarlo
 })
 export class AuthModule {}

@@ -53,17 +53,25 @@ export function sessionRepo(tx: Prisma.TransactionClient) {
       return Boolean(session);
     },
 
-    async deleteSessionForUser(user_id: string): Promise<boolean> {
+    async deleteSessionForUser(
+      user_id: string,
+      user_type: string,
+    ): Promise<boolean> {
       if (!user_id?.trim()) throw new Error('User ID is required');
-      console.log('Deleting sessions for user_id:', user_id);
+      console.log(
+        'Deleting sessions for user_id:',
+        user_id,
+        'type:',
+        user_type,
+      );
+
+      const whereClause =
+        user_type === 'OWNER'
+          ? { user_owner_id: user_id.trim() }
+          : { user_id: user_id.trim() };
 
       const session = await tx.session_app.deleteMany({
-        where: {
-          OR: [
-            user_id?.trim() ? { user_id: user_id.trim() } : {},
-            user_id?.trim() ? { user_owner_id: user_id.trim() } : {},
-          ],
-        },
+        where: whereClause,
       });
 
       console.log('Deleted sessions count:', session.count);

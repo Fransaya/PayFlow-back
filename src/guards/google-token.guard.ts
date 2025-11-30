@@ -6,9 +6,10 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { GoogleTokenService } from '@src/modules/auth/service/google-token.service';
+import { GoogleTokenService } from '@src/modules/auth/services/google-token.service';
 import { IdTokenPayload } from '@src/types/idTokenPayload';
 
+//* Esta guardia unicamente se va a utilizar para el registro de user-owner ya que no envia access_token de la app porque todavia no tiene usuario
 @Injectable()
 export class GoogleTokenGuard implements CanActivate {
   constructor(private readonly googleTokenService: GoogleTokenService) {}
@@ -16,25 +17,24 @@ export class GoogleTokenGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
-    // 1. Leer header personalizado
-    const authHeader: string = request.headers['x-google-token'] as string;
-    if (!authHeader) {
-      throw new BadRequestException('Authorization header is required');
+    let googleToken: string | null = null;
+
+    if (!googleToken && request.cookies) {
+      googleToken = request.cookies['google_id_token'];
     }
 
-    // 2. Extraer token (Bearer <token>)
-    const [scheme, token] = authHeader.split(' ');
-    if (!token || scheme.toLowerCase() !== 'bearer') {
+    if (!googleToken) {
       throw new BadRequestException('ID token is required');
     }
 
     try {
       // 3. Verificar y decodificar token de Google
       const decoded: IdTokenPayload =
-        await this.googleTokenService.decodeIdToken(token);
+        await this.googleTokenService.decodeIdToken(googleToken);
 
       // 4. Adjuntar usuario al request
-      request.user = decoded;
+      request.googleUser = decoded;
+      request.googleToken = googleToken;
 
       return true; // permite continuar
     } catch (err: any) {

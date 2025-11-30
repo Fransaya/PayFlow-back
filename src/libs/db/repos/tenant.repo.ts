@@ -3,6 +3,9 @@ import { Prisma } from '@prisma/client';
 // Interfaces de tenant
 import { TenantUpdate } from '@src/types/tenant';
 
+// Dto
+import { UpdateVisualConfigDto } from '@src/modules/tenants/dto/UpdateVisualConfig.dto';
+
 export function tenantRepo(tx: Prisma.TransactionClient) {
   return {
     async tenantExist(slug: string): Promise<boolean> {
@@ -138,6 +141,30 @@ export function tenantRepo(tx: Prisma.TransactionClient) {
           custom_domain: true,
           plan_status: true,
           created_at: true,
+        },
+      });
+    },
+
+    async updateTenantVisualConfig(
+      tenantId: string,
+      data: UpdateVisualConfigDto,
+    ) {
+      const updateData: UpdateVisualConfigDto = {};
+
+      if (data.primary_color)
+        updateData.primary_color = data.primary_color.trim();
+      if (data.secondary_color)
+        updateData.secondary_color = data.secondary_color.trim();
+
+      return await tx.tenant.update({
+        where: { tenant_id: tenantId },
+        data: {
+          primary_color: data.primary_color,
+          secondary_color: data.secondary_color,
+        },
+        select: {
+          primary_color: true,
+          secondary_color: true,
         },
       });
     },

@@ -47,5 +47,35 @@ export function categoryRepo(tx: Prisma.TransactionClient) {
         where: { category_id },
       });
     },
+
+    // Metodo publico utilizado por el front-end ( carrito public )
+    async getPublicCategoriesByTenant(
+      tenant_id: string,
+      q: {
+        page: number;
+        limit: number;
+        search: string;
+        order: 'ASC' | 'DESC';
+      },
+    ) {
+      const { page, limit, search, order } = q;
+      const skip = (page - 1) * limit;
+
+      return tx.category.findMany({
+        where: {
+          tenant_id,
+          active: true,
+          ...(search && {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { description: { contains: search, mode: 'insensitive' } },
+            ],
+          }),
+        },
+        orderBy: { name: order === 'ASC' ? 'asc' : 'desc' },
+        skip,
+        take: limit,
+      });
+    },
   };
 }

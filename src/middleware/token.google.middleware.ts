@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
-import { GoogleTokenService } from '@src/modules/auth/service/google-token.service';
+import { GoogleTokenService } from '@src/modules/auth/services/google-token.service';
 import { IdTokenPayload } from '@src/types/idTokenPayload';
 
 @Injectable()

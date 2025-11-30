@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 
 export function businessRepo(tx: Prisma.TransactionClient) {
   return {
-    async getBusinessById(tenant_id: string) {
+    async getBusinessInfo(tenant_id: string) {
       return tx.business.findFirst({
         where: {
           tenant_id,
@@ -80,6 +80,22 @@ export function businessRepo(tx: Prisma.TransactionClient) {
           contact_name: true,
           contact_phone: true,
           address: true,
+        },
+      });
+    },
+
+    async updateBusinessLogo(
+      business_id: string,
+      tenant_id: string,
+      logo_url: string,
+    ) {
+      return tx.business.update({
+        where: {
+          business_id,
+          tenant_id,
+        },
+        data: {
+          logo_url,
         },
       });
     },

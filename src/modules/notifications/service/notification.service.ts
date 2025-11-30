@@ -3,11 +3,11 @@ import { EmailService } from '@src/messaging/services/email.service';
 
 // Servicios de modulos externos
 import { UserBusinessService } from '@src/modules/userBusiness/services/userBusiness.service';
-import { TenantService } from '@src/modules/tenant/service/tenant.service';
+import { TenantService } from '@src/modules/tenants/services/tenant.service';
 import { UserOwnerService } from '@src/modules/userOwner/services/userOwner.service';
 
 import { UserFromJWT } from '@src/types/userFromJWT';
-import { createInviteToken } from '@src/modules/auth/utility/createInviteToken';
+import { createInviteToken } from '@src/modules/auth/utilities/createInviteToken';
 
 interface InviteBusinessEmailData {
   employeeEmail: string;
@@ -31,7 +31,7 @@ export class NotificationService {
     private readonly userBusinessService: UserBusinessService,
     private readonly tenantService: TenantService,
     private readonly userOwnerService: UserOwnerService,
-  ) { }
+  ) {}
 
   /**
    * Envía email de invitación a un empleado para unirse a la tienda

@@ -3,9 +3,9 @@ import { Prisma } from '@prisma/client';
 
 export function authRepo(tx: Prisma.TransactionClient) {
   return {
-    async getAuthAccountInfoByProviderSub(provider_sub: string) {
+    async getAuthAccountInfoByUserId(user_id: string) {
       return tx.auth_account.findFirst({
-        where: { provider_sub },
+        where: { user_ref: user_id },
         select: {
           account_id: true,
           user_type: true,

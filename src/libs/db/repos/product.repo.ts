@@ -126,5 +126,80 @@ export function productRepo(tx: Prisma.TransactionClient) {
         data: { visible },
       });
     },
+
+    // Metodo para obtener productos de un negocio utilizado por carrito public
+    async getProductsByBusiness(
+      tenant_id: string,
+      q: {
+        page: number;
+        limit: number;
+        search?: string;
+        category_id?: string;
+        sort_by?: string;
+        order?: string;
+      },
+    ) {
+      //* Pagination */
+      const page = q.page > 0 ? q.page : 1;
+      const limit = q.limit > 0 ? q.limit : 10;
+      const skip = (page - 1) * limit;
+
+      //* Condición obligatoria por tenant y visible */
+      const where: Prisma.productWhereInput = {
+        tenant_id,
+        visible: true, // Solo productos visibles para el público
+      };
+
+      //* Filtro por texto por nombre y descripción de producto */
+      if (q.search && q.search.trim() !== '') {
+        where.OR = [
+          { name: { contains: q.search, mode: 'insensitive' } },
+          { description: { contains: q.search, mode: 'insensitive' } },
+        ];
+      }
+
+      //* Filtro de categoría de producto */
+      if (q.category_id !== undefined && q.category_id !== null) {
+        where.category_id = { equals: q.category_id };
+      }
+
+      //* Lista de parámetros permitidos para el ordenamiento */
+      const ALLOWED_SORT_FIELDS = new Set([
+        'name',
+        'price',
+        'stock',
+        'created_at',
+        'product_id',
+      ]);
+
+      //* Campo de ordenamiento */
+      const sortField =
+        q.sort_by && ALLOWED_SORT_FIELDS.has(q.sort_by) ? q.sort_by : 'name';
+
+      //* Dirección de ordenamiento */
+      const sortDir = q.order === 'desc' ? 'desc' : 'asc';
+
+      //* Objeto de ordenamiento para Prisma */
+      const orderBy = {
+        [sortField]: sortDir,
+      } as Prisma.productOrderByWithRelationInput;
+
+      const [total, data] = await Promise.all([
+        tx.product.count({ where }),
+        tx.product.findMany({ where, orderBy, skip, take: limit }),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        data,
+        meta: {
+          total_items: total,
+          total_pages: totalPages,
+          current_page: page,
+          page_size: limit,
+        },
+      };
+    },
   };
 }

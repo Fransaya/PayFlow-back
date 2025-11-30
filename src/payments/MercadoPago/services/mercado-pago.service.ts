@@ -17,6 +17,7 @@ const MOCK_KMS_KEY = Buffer.from(
   'utf-8',
 );
 
+// TODO: continuar desarrollando modulo de mercado pago
 @Injectable()
 export class MercadoPagoService {
   private readonly CLIENT_ID: string | undefined;

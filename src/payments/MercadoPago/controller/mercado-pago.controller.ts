@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Query,
-  Redirect,
   Req,
   Res,
   UnauthorizedException,
@@ -43,7 +42,6 @@ export class MercadoPagoController {
   //TODO: ver si el middleware aca validaria la seguridad del rol que sea owner -->  en caso de no implementar otro
   @Get('oauth/start')
   @UseGuards(JwtGuard)
-  @Redirect()
   startOAuth(@CurrentUser() user: any) {
     const tenantId = user.tenant_id || null;
 
@@ -52,7 +50,7 @@ export class MercadoPagoController {
     }
 
     const authUrl = this.mercadoPagoService.getOAuthUrl(tenantId);
-    return { url: authUrl, statusCode: 302 };
+    return { url: authUrl };
   }
 
   /**

@@ -1,0 +1,894 @@
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+  InternalServerErrorException,
+  UnauthorizedException,
+  Logger,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
+
+import axios from 'axios';
+import * as bcrypt from 'bcrypt';
+
+import { USER_TYPE, PROVIDER } from '@src/constants/app.contants';
+
+// DB_LIBS
+import { DbService, authRepo, sessionRepo } from '@libs/db';
+
+import { session_app } from '@prisma/client';
+
+import authConfig from '@src/config/auth.config';
+
+import {
+  RegisterOwnerDto,
+  RegisterBusinessDto,
+  QueryParmsRegisterBusinessDto,
+} from '@src/modules/auth/dto/auth.dto';
+import { UpdateSessionAppDto, SessionAppInternalDto } from '../dto/session.dto';
+
+// Tipos de session
+import { SessionAppCreate } from '@src/types/sesssionApp';
+import {
+  GetUserByEmailResponse,
+  AuthCallbackResponse,
+  SyncAccountResponse,
+  LoginAppResponse,
+} from '@src/types/user';
+
+import { IdTokenPayload } from '@src/types/idTokenPayload';
+import { InviteToken } from '@src/types/inviteToken';
+import { GoogleRefreshTokenResponse } from '@src/types/googleToken';
+
+// Funciones de utilidad
+import { validateInviteToken } from '../utilities/validateInviteToken';
+import { validateInviteTokenEmail } from '../utilities/validateInviteTokenEmail';
+import { validateOwnerRegistrationData } from '../utilities/validateOwnerRegistrationData';
+import { decodeToken, decodeTokenGoogle } from '../utilities/decodeToken';
+
+// Metodo de user.service
+import { UserService } from '@src/modules/users/services/user.service';
+import { TenantService } from '@src/modules/tenants/services/tenant.service';
+
+// Utilidad para generacion de token
+import { generateToken } from '../utilities/generateToken';
+import { hashPassword } from '../utilities/hashPassword';
+import { UserFromJWT } from '@src/types/userFromJWT';
+
+@Injectable()
+export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private config = authConfig();
+
+  constructor(
+    private readonly dbService: DbService,
+    private readonly userService: UserService,
+    @Inject(forwardRef(() => TenantService))
+    private readonly tenantService: TenantService,
+  ) {}
+
+  // =================== METODO DE OBTENCION URL LOGIN ===================
+
+  getLoginUrl(): any {
+    try {
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const redirectUri =
+        process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5173/sync';
+
+      const scope = ['openid', 'profile', 'email'].join(' ');
+
+      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      authUrl.searchParams.set('client_id', clientId!);
+      authUrl.searchParams.set('redirect_uri', redirectUri);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('scope', scope);
+      authUrl.searchParams.set('access_type', 'offline');
+      authUrl.searchParams.set('prompt', 'consent');
+      authUrl.searchParams.set(
+        'state',
+        Math.random().toString(36).substring(7),
+      );
+
+      return { loginUrl: authUrl.toString() };
+    } catch (error) {
+      this.logger.error(`Failed to get login URL: ${error}`);
+      throw new InternalServerErrorException(
+        'An error occurred while generating the login URL',
+      );
+    }
+  }
+
+  async handleAuthCallback(code: string): Promise<AuthCallbackResponse> {
+    try {
+      // 1. Intercambiar código por tokens con Google
+      const tokenResponse: any = await axios.post(
+        'https://oauth2.googleapis.com/token',
+        {
+          code,
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET,
+          redirect_uri: `${process.env.FRONTEND_URL}/sync`,
+          grant_type: 'authorization_code',
+        },
+      );
+
+      const { access_token, refresh_token, expires_in, id_token } =
+        tokenResponse.data;
+
+      // 2. Obtener información del usuario desde Google
+      const userResponse: any = await axios.get(
+        'https://www.googleapis.com/oauth2/v2/userinfo',
+        {
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+          },
+        },
+      );
+
+      const googleUser: IdTokenPayload = userResponse.data;
+
+      const responseSyncAccount = await this.synchAuthAccount(googleUser);
+
+      // Construir respuesta base con tokens de Google
+      const response = {
+        access_token,
+        refresh_token,
+        expires_in,
+        id_token,
+        user: {
+          email: googleUser.email,
+          name: googleUser.name,
+          picture: googleUser.picture,
+        },
+        action: responseSyncAccount.data.action, // 'LOGIN' o 'REGISTER'
+        user_exists: responseSyncAccount.data.existUser,
+        message: responseSyncAccount.description,
+      };
+
+      // Si el usuario ya existe, hacer login automático
+      if (
+        responseSyncAccount.data.existUser &&
+        responseSyncAccount.data.action === 'LOGIN'
+      ) {
+        const loginResult = await this.logingApp(googleUser);
+
+        return {
+          ...response,
+          app_session: loginResult.data,
+          redirect_to: '/dashboard',
+        };
+      }
+
+      // Si el usuario no existe, retornar con indicación de registro
+      return {
+        ...response,
+        redirect_to: '/register',
+      };
+    } catch (error: any) {
+      console.log('error', error);
+      this.logger.error(`Failed to handle auth callback: ${error}`);
+
+      if (error.response && error.response.data) {
+        this.logger.error(
+          `Google error response: ${JSON.stringify(error.response.data)}`,
+        );
+      }
+
+      throw new InternalServerErrorException(
+        'An error occurred during authentication callback',
+      );
+    }
+  }
+
+  // =================== METODO DE SINCRONIZACION ===================
+  async synchAuthAccount(
+    user_decode: IdTokenPayload,
+  ): Promise<SyncAccountResponse> {
+    try {
+      const existUser = await this.userService.validateUserNotExists(
+        user_decode.email,
+      );
+
+      if (existUser) {
+        return {
+          description: 'Usuario sincronizado correctamente',
+          data: {
+            existUser: true,
+            action: 'LOGIN',
+          },
+        };
+      } else {
+        return {
+          description: 'Usuario no registrado',
+          data: {
+            existUser: false,
+            action: 'REGISTER',
+          },
+        };
+      }
+    } catch (error) {
+      this.logger.error(`Failed to sync data: ${error}`);
+
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'An error occurred during sync data',
+      );
+    }
+  }
+
+  // =================== METODOS DE SESSION ===================
+  async logingApp(user_decode: IdTokenPayload): Promise<LoginAppResponse> {
+    try {
+      const userData: GetUserByEmailResponse =
+        await this.userService.getUserByEmail(user_decode.email);
+
+      if (!userData) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Validar que tenga user_details
+      if (!('user_details' in userData) || !userData.user_details) {
+        throw new UnauthorizedException('User details not found');
+      }
+
+      // Validar que tenga provider
+      if (!userData.provider) {
+        throw new UnauthorizedException('User provider not found');
+      }
+
+      const { user_details } = userData;
+
+      // Genero token de access_token de aplicacion y refresh token internos para la aplicacion ( session )
+      const access_token: string = generateToken(
+        {
+          user_id: userData.user_ref,
+          tenant_id: user_details.tenants.tenant_id,
+          provider: userData.provider,
+          user_type: userData.user_type,
+        },
+        userData,
+        this.config.jwt.expiresIn,
+      );
+
+      const refresh_token: string = generateToken(
+        {
+          user_id: userData.user_ref,
+          tenant_id: user_details.tenants.tenant_id,
+          provider: userData.provider,
+          user_type: userData.user_type,
+        },
+        userData,
+        this.config.jwt.refreshExpiresIn,
+      );
+
+      const sessionData: SessionAppCreate = {
+        ...(userData.user_type === USER_TYPE.OWNER && {
+          user_owner_id: userData.user_ref,
+        }),
+        ...(userData.user_type === USER_TYPE.BUSINESS && {
+          user_id: userData.user_ref,
+        }),
+        tenant_id: user_details.tenants.tenant_id,
+        provider: PROVIDER.GOOGLE,
+        refresh_token_enc: refresh_token,
+        refresh_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        ip_address: '', // TODO: obtener IP
+        user_agent: '', // TODO: obtener user agent
+      };
+
+      const session = await this.upsertSession(sessionData);
+
+      return {
+        description: 'Login successful',
+        data: {
+          user_type: userData.user_type,
+          access_token,
+          refresh_token,
+          token_type: 'Bearer',
+          expires_in: this.config.jwt.expiresIn,
+          session,
+        },
+      };
+
+      // Guardo y genero data para la session
+    } catch (error) {
+      this.logger.error(`Failed to login: ${error}`);
+
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('An error occurred during login');
+    }
+  }
+
+  async loginBusinessApp(
+    body: {
+      email: string;
+      password: string;
+    },
+    slug: string,
+  ): Promise<any> {
+    try {
+      const userData: GetUserByEmailResponse =
+        await this.userService.getUserByEmail(body.email);
+
+      if (!userData) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Validar que tenga user_details
+      if (!('user_details' in userData) || !userData.user_details) {
+        throw new UnauthorizedException('User details not found');
+      }
+
+      // Validar que tenga provider
+      if (!userData.provider) {
+        throw new UnauthorizedException('User provider not found');
+      }
+
+      const { user_details } = userData;
+
+      if ('user_role' in user_details) {
+        console.log('userData', user_details.user_role);
+      }
+
+      if (!userData) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      //* Comparo las claves
+      const passwordMatch = await bcrypt.compare(
+        body.password,
+        userData.password_hash || '',
+      );
+
+      if (!passwordMatch) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+
+      //* Valido si el slug recibido coincide con el del tenant del usuario
+      if (user_details.tenants.slug !== slug) {
+        throw new UnauthorizedException('Invalid tenant slug');
+      }
+
+      // Genero token de access_token de aplicacion y refresh token internos para la aplicacion ( session )
+      const access_token: string = generateToken(
+        {
+          user_id: userData.user_ref,
+          tenant_id: user_details.tenants.tenant_id,
+          provider: userData.provider,
+          user_type: userData.user_type,
+          roles: 'user_role' in user_details ? user_details.user_role : null,
+        },
+        userData,
+        this.config.jwt.expiresIn,
+      );
+
+      const refresh_token: string = generateToken(
+        {
+          user_id: userData.user_ref,
+          tenant_id: user_details.tenants.tenant_id,
+          provider: userData.provider,
+          user_type: userData.user_type,
+          roles: 'user_role' in user_details ? user_details.user_role : null,
+        },
+        userData,
+        this.config.jwt.refreshExpiresIn,
+      );
+
+      const sessionData: SessionAppCreate = {
+        ...(userData.user_type === USER_TYPE.OWNER && {
+          user_owner_id: userData.user_ref,
+        }),
+        ...(userData.user_type === USER_TYPE.BUSINESS && {
+          user_id: userData.user_ref,
+        }),
+        tenant_id: user_details.tenants.tenant_id,
+        provider: PROVIDER.LOCAL,
+        refresh_token_enc: refresh_token,
+        refresh_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        ip_address: '', // TODO: obtener IP
+        user_agent: '', // TODO: obtener user agent
+      };
+
+      const session = await this.upsertSession(sessionData);
+
+      return {
+        description: 'Login successful',
+        data: {
+          user_type: userData.user_type,
+          access_token,
+          refresh_token,
+          token_type: 'Bearer',
+          expires_in: this.config.jwt.expiresIn,
+          session,
+        },
+      };
+
+      // Guardo y genero data para la session
+    } catch (error) {
+      this.logger.error(`Failed to login: ${error}`);
+      throw new InternalServerErrorException('An error occurred during login');
+    }
+  }
+
+  async logoutApp(user_decode: UserFromJWT): Promise<any> {
+    try {
+      console.log('userDeocde', user_decode);
+      const result = await this.deleteSessionForUser(
+        user_decode.user_id,
+        user_decode.tenant_id,
+        user_decode.user_type,
+      );
+
+      if (!result) {
+        throw new BadRequestException('No active session found to logout');
+      }
+
+      return {
+        description: 'Logout successful',
+        data: result,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to logout: ${error}`);
+
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('An error occurred during logout');
+    }
+  }
+
+  async refreshSession(
+    user_decode_app: UserFromJWT,
+    user_decode_google?: UserFromJWT,
+    refresh_token_goole?: string,
+  ): Promise<any> {
+    try {
+      let newSessionGoogle: any = null;
+      if (refresh_token_goole) {
+        const responseRefreshGoogle =
+          await axios.post<GoogleRefreshTokenResponse>(
+            'https://oauth2.googleapis.com/token',
+            {
+              client_id: process.env.GOOGLE_CLIENT_ID,
+              client_secret: process.env.GOOGLE_CLIENT_SECRET,
+              refresh_token: refresh_token_goole,
+              grant_type: 'refresh_token',
+            },
+          );
+
+        // Obtengo nuevos tokens de google
+        const { access_token, id_token, expires_in } =
+          responseRefreshGoogle.data;
+
+        newSessionGoogle = {
+          access_token,
+          id_token,
+          expires_in,
+        };
+      }
+
+      const userData: GetUserByEmailResponse =
+        await this.userService.getUserByEmail(user_decode_app.email);
+
+      if (!userData) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Validar que tenga user_details
+      if (!('user_details' in userData) || !userData.user_details) {
+        throw new UnauthorizedException('User details not found');
+      }
+
+      // Validar que tenga provider
+      if (!userData.provider) {
+        throw new UnauthorizedException('User provider not found');
+      }
+
+      const { user_details } = userData;
+
+      // Genero token de access_token de aplicacion y refresh token internos para la aplicacion ( session )
+      const access_token_app: string = generateToken(
+        {
+          user_id: userData.user_ref,
+          tenant_id: user_details.tenants.tenant_id,
+          provider: userData.provider,
+          user_type: userData.user_type,
+        },
+        userData,
+        this.config.jwt.expiresIn,
+      );
+
+      const refresh_token_app: string = generateToken(
+        {
+          user_id: userData.user_ref,
+          tenant_id: user_details.tenants.tenant_id,
+          provider: userData.provider,
+          user_type: userData.user_type,
+        },
+        userData,
+        this.config.jwt.refreshExpiresIn,
+      );
+
+      const sessionData: SessionAppCreate = {
+        ...(userData.user_type === USER_TYPE.OWNER && {
+          user_owner_id: userData.user_ref,
+        }),
+        ...(userData.user_type === USER_TYPE.BUSINESS && {
+          user_id: userData.user_ref,
+        }),
+        tenant_id: user_details.tenants.tenant_id,
+        provider:
+          userData.user_type == USER_TYPE.OWNER
+            ? PROVIDER.GOOGLE
+            : PROVIDER.LOCAL,
+        refresh_token_enc: refresh_token_app,
+        refresh_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      };
+
+      const session = await this.upsertSession(sessionData);
+
+      return {
+        description: 'Refresh successful',
+        data: {
+          user_type: userData.user_type,
+          access_token_app,
+          refresh_token_app,
+          access_token_google: newSessionGoogle.access_token,
+          id_token_google: newSessionGoogle.id_token,
+          token_type: 'Bearer',
+          expires_in: this.config.jwt.expiresIn,
+          session,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to refresh session: ${error}`);
+
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'An error occurred during session refresh',
+      );
+    }
+  }
+
+  async getSession(session_id: string): Promise<SessionAppInternalDto | null> {
+    try {
+      return this.dbService.runInTransaction({}, async (tx) => {
+        const repository = sessionRepo(tx);
+        return await repository.getSession(session_id);
+      });
+    } catch (error) {
+      this.logger.error(`Error getting session: ${error}`);
+      throw new InternalServerErrorException('Error getting session');
+    }
+  }
+
+  async deleteSessionForUser(
+    user_id: string,
+    tenantId: string,
+    user_type: string,
+  ): Promise<boolean> {
+    try {
+      console.log('Deleting session for user_id:', user_id);
+      const user_auth_info = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repository = authRepo(tx);
+          return await repository.getAuthAccountInfoByUserId(user_id);
+        },
+      );
+
+      if (!user_auth_info) {
+        throw new BadRequestException('User auth account not found');
+      }
+      console.log('user_auth_info', user_auth_info);
+      const user_ref = user_auth_info.user_ref;
+
+      const deleteSession = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repository = sessionRepo(tx);
+          return await repository.deleteSessionForUser(user_ref, user_type);
+        },
+      );
+
+      if (!deleteSession) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deleting session for user ${user_id}: ${error}`);
+      throw new InternalServerErrorException('Error deleting session for user');
+    }
+  }
+
+  async validateExistSession(session_id: string): Promise<boolean> {
+    try {
+      return this.dbService.runInTransaction({}, async (tx) => {
+        const repository = sessionRepo(tx);
+        return await repository.validateExistSession(session_id);
+      });
+    } catch (error) {
+      this.logger.error(`Error validating session existence: ${error}`);
+      throw new InternalServerErrorException('Error validating session');
+    }
+  }
+
+  async saveSession(session_data: SessionAppCreate): Promise<session_app> {
+    try {
+      return this.dbService.runInTransaction(
+        { tenantId: session_data.tenant_id },
+        async (tx) => {
+          const repository = sessionRepo(tx);
+          return await repository.createAppSession(session_data);
+        },
+      );
+    } catch (error) {
+      this.logger.error(`Error saving session: ${error}`);
+      throw new InternalServerErrorException('Error saving session');
+    }
+  }
+
+  async upsertSession(session_data: any): Promise<session_app> {
+    try {
+      return this.dbService.runInTransaction(
+        { tenantId: session_data.tenant_id },
+        async (tx) => {
+          const repository = sessionRepo(tx);
+          return await repository.upsertSession(session_data);
+        },
+      );
+    } catch (error) {
+      this.logger.error(`Error upserting session: ${error}`);
+      throw new InternalServerErrorException('Error upserting session');
+    }
+  }
+
+  async updateSession(
+    session_data: UpdateSessionAppDto,
+    session_id: string,
+  ): Promise<session_app> {
+    try {
+      return this.dbService.runInTransaction({}, async (tx) => {
+        const repository = sessionRepo(tx);
+        return await repository.updateSession(session_data, session_id);
+      });
+    } catch (error) {
+      this.logger.error(`Error updating session: ${error}`);
+      throw new InternalServerErrorException('Error updating session');
+    }
+  }
+
+  async deleteSession(session_id: string): Promise<boolean> {
+    try {
+      return this.dbService.runInTransaction({}, async (tx) => {
+        const repository = sessionRepo(tx);
+        return await repository.deleteSession(session_id);
+      });
+    } catch (error) {
+      this.logger.error(`Error deleting session: ${error}`);
+      throw new InternalServerErrorException('Error deleting session');
+    }
+  }
+
+  // ==================== METODOS DE CREACION =========================
+
+  async registerOwner(body: RegisterOwnerDto, user_decode: IdTokenPayload) {
+    const { tenant, user } = body;
+
+    try {
+      // 1. Validar datos de entrada adicionales
+      validateOwnerRegistrationData(body);
+
+      // 2. Validar que el tenant no exista
+      await this.tenantService.validateTenantDoesNotExist(tenant.slug);
+
+      // 3. Validar que el usuario no esté ya registrado
+      const exist = await this.userService.validateUserNotExists(
+        user_decode.email,
+      );
+
+      if (exist) {
+        throw new ConflictException(
+          `User with email "${user_decode.email}" already exists`,
+        );
+      }
+
+      // 4. Crear tenant, user owner y auth account en transacción
+      const result = await this.createOwnerRegistration({
+        tenant,
+        user,
+        user_decode,
+      });
+
+      this.logger.log(
+        `Owner registered successfully for tenant: ${tenant.slug}`,
+      );
+
+      return {
+        success: true,
+        data: result,
+        message: 'Owner registered successfully',
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to register owner: ${error}`);
+
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'An error occurred during owner registration',
+      );
+    }
+  }
+
+  async registerBusiness(
+    body: RegisterBusinessDto,
+    queryParams: QueryParmsRegisterBusinessDto,
+  ) {
+    const { invite_token } = queryParams;
+    const { user }: RegisterBusinessDto = body;
+
+    console.log('user', user);
+
+    try {
+      // 1. Validar y decodificar invite token
+      const decoded_invite_token: InviteToken =
+        validateInviteToken(invite_token);
+
+      console.log('decoded_invite_token', decoded_invite_token);
+
+      // 2. Validar que el email del token coincide con el del usuario
+      validateInviteTokenEmail(decoded_invite_token, body.user.email);
+
+      // 3. Validar que el tenant existe
+      await this.tenantService.validateTenantExists(
+        decoded_invite_token.tenant_id,
+      );
+
+      // 4. Validar que el usuario no esté ya registrado en este tenant
+      await this.userService.validateUserNotInTenant(
+        body.user.email,
+        decoded_invite_token.tenant_id,
+        body.user.id,
+      );
+
+      // 5. Crear business user
+      const result = await this.createBusinessRegistration({
+        decoded_invite_token,
+        user,
+      });
+
+      const tenantInfo = await this.tenantService.getTenantInfo(
+        decoded_invite_token.tenant_id,
+      );
+
+      this.logger.log(
+        `Business user registered successfully for tenant: ${decoded_invite_token.tenant_id}`,
+      );
+
+      return {
+        success: true,
+        data: result,
+        tenant: { slug: tenantInfo?.slug || '' },
+        message: 'Business user registered successfully',
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to register business: ${error}`);
+
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'An error occurred during business registration',
+      );
+    }
+  }
+
+  private async createOwnerRegistration({
+    tenant,
+    user,
+    user_decode,
+  }: {
+    tenant: { name: string; slug: string };
+    user: { display_name: string; phone: string };
+    user_decode: IdTokenPayload;
+  }) {
+    return this.dbService.runInTransaction({}, async (tx) => {
+      const repository = authRepo(tx);
+
+      return await repository.createOwnerWithTransaction(
+        { name: tenant.name, slug: tenant.slug },
+        {
+          name: user.display_name,
+          email: user_decode.email,
+          phone: user.phone,
+        },
+        {
+          user_type: USER_TYPE.OWNER,
+          provider: PROVIDER.GOOGLE,
+          provider_sub: user_decode.sub,
+        },
+      );
+    });
+  }
+
+  private async createBusinessRegistration({
+    decoded_invite_token,
+    user,
+  }: {
+    decoded_invite_token: InviteToken;
+    user: { id: string; name: string; email: string; password: string };
+  }) {
+    const passwordHash = await hashPassword(user.password);
+
+    return this.dbService.runInTransaction({}, async (tx) => {
+      const repository = authRepo(tx);
+
+      return repository.createBusinessWithTransaction(
+        {
+          id: user.id,
+          tenant_id: decoded_invite_token.tenant_id,
+          name: user.name,
+          email: user.email,
+          status: decoded_invite_token.status,
+        },
+        {
+          user_type: USER_TYPE.BUSINESS,
+          provider: PROVIDER.LOCAL,
+          provider_sub: user.id,
+          password_hash: passwordHash,
+        },
+      );
+    });
+  }
+
+  // ===================  VALIDACIONES DE JWT ===================
+  validateJwtToken(token: string) {
+    try {
+      const decoded = decodeToken(token);
+
+      return decoded;
+    } catch (error) {
+      this.logger.error(`Failed to validate JWT token: ${error}`);
+      throw new UnauthorizedException('Invalid JWT token');
+    }
+  }
+}
