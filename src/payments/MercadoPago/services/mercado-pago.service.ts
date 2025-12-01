@@ -2,6 +2,8 @@ import {
   Injectable,
   UnauthorizedException,
   InternalServerErrorException,
+  BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
@@ -12,14 +14,24 @@ import { DbService, MpConfigRepo } from '@src/libs/db';
 
 // NOTE: En un entorno de producción, usa AWS KMS/Vault para el cifrado real.
 // Este es un placeholder SÓLO para demostrar la lógica.
+// La clave DEBE ser exactamente 32 bytes para AES-256
 const MOCK_KMS_KEY = Buffer.from(
-  process.env.KMS_MOCK_KEY_32_BYTES || 'a_secret_key_for_mock_encryption_32',
+  process.env.KMS_MOCK_KEY_32_BYTES || '12345678901234567890123456789012', // Exactamente 32 caracteres
   'utf-8',
 );
+
+// Cache temporal para validar el state y PKCE (en producción usar Redis)
+interface OAuthStateData {
+  tenantId: string;
+  codeVerifier: string; // PKCE: se guarda para enviarlo al intercambiar tokens
+  expiresAt: number;
+}
+const stateCache = new Map<string, OAuthStateData>();
 
 // TODO: continuar desarrollando modulo de mercado pago
 @Injectable()
 export class MercadoPagoService {
+  private readonly logger = new Logger(MercadoPagoService.name);
   private readonly CLIENT_ID: string | undefined;
   private readonly CLIENT_SECRET: string | undefined;
   private readonly REDIRECT_URI: string | undefined;
@@ -54,6 +66,7 @@ export class MercadoPagoService {
 
   /**
    * 1. Genera la URL de redirección a Mercado Pago para iniciar el flujo OAuth.
+   * Implementa PKCE (Proof Key for Code Exchange) para mayor seguridad.
    * @param tenantId UUID del negocio que inicia la conexión.
    * @returns URL de redirección.
    */
@@ -65,28 +78,124 @@ export class MercadoPagoService {
     }
 
     // El scope 'offline_access' es CLAVE para recibir el refresh_token
-    const scopes = 'read_payments write_preferences offline_access';
+    const scopes = 'read write offline_access';
     const authUrl = 'https://auth.mercadopago.com/authorization';
 
     // El 'state' es crucial para seguridad (CSRF) y para identificar el tenant
-    const state = `${tenantId}|${crypto.randomBytes(16).toString('hex')}`;
+    const stateHash = crypto.randomBytes(16).toString('hex');
+    const state = `${tenantId}|${stateHash}`;
+
+    // PKCE: Generar code_verifier (43-128 caracteres alfanuméricos)
+    const codeVerifier = this.generateCodeVerifier();
+
+    // PKCE: Generar code_challenge usando SHA256 + Base64URL
+    const codeChallenge = this.generateCodeChallenge(codeVerifier);
+
+    // Guardar el state y code_verifier en cache con expiración de 10 minutos
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    stateCache.set(state, { tenantId, codeVerifier, expiresAt });
+
+    // Limpiar states expirados
+    this.cleanExpiredStates();
+
+    this.logger.log(`OAuth con PKCE iniciado para tenant: ${tenantId}`);
 
     return (
       `${authUrl}?client_id=${this.CLIENT_ID}` +
       `&response_type=code` +
       `&platform_id=mp` +
-      `&state=${state}` +
+      `&state=${encodeURIComponent(state)}` +
       `&redirect_uri=${encodeURIComponent(this.REDIRECT_URI)}` +
-      `&scope=${encodeURIComponent(scopes)}`
+      `&scope=${encodeURIComponent(scopes)}` +
+      `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+      `&code_challenge_method=S256`
     );
   }
 
   /**
+   * PKCE: Genera un code_verifier aleatorio (43-128 caracteres)
+   * Debe contener solo caracteres: [A-Z] [a-z] [0-9] - . _ ~
+   */
+  private generateCodeVerifier(): string {
+    // Generar 64 bytes aleatorios y convertir a base64url (sin padding)
+    const buffer = crypto.randomBytes(64);
+    return buffer
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '')
+      .substring(0, 128); // Máximo 128 caracteres
+  }
+
+  /**
+   * PKCE: Genera el code_challenge a partir del code_verifier usando S256
+   * S256 = BASE64URL(SHA256(code_verifier))
+   */
+  private generateCodeChallenge(codeVerifier: string): string {
+    const hash = crypto.createHash('sha256').update(codeVerifier).digest();
+    return hash
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+
+  /**
+   * Limpia los states expirados del cache
+   */
+  private cleanExpiredStates(): void {
+    const now = Date.now();
+    for (const [key, value] of stateCache.entries()) {
+      if (value.expiresAt < now) {
+        stateCache.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Valida el state recibido del callback
+   * @param state El state recibido de MP
+   * @returns El tenantId y codeVerifier si es válido
+   * @throws BadRequestException si el state es inválido o expirado
+   */
+  validateState(state: string): { tenantId: string; codeVerifier: string } {
+    const cached = stateCache.get(state);
+
+    if (!cached) {
+      this.logger.warn(`State inválido o no encontrado: ${state}`);
+      throw new BadRequestException(
+        'State inválido o expirado. Por favor, inicie el proceso nuevamente.',
+      );
+    }
+
+    if (cached.expiresAt < Date.now()) {
+      stateCache.delete(state);
+      this.logger.warn(`State expirado para tenant: ${cached.tenantId}`);
+      throw new BadRequestException(
+        'La autorización ha expirado. Por favor, inicie el proceso nuevamente.',
+      );
+    }
+
+    // Eliminar el state usado (one-time use)
+    stateCache.delete(state);
+
+    return {
+      tenantId: cached.tenantId,
+      codeVerifier: cached.codeVerifier,
+    };
+  }
+
+  /**
    * 2. Intercambia el código de autorización por los tokens de acceso del negocio.
+   * Incluye el code_verifier para PKCE.
    * @param code Código recibido de Mercado Pago.
+   * @param codeVerifier El code_verifier generado al iniciar OAuth (PKCE).
    * @returns La respuesta de OAuth de MP.
    */
-  private async exchangeCodeForTokens(code: string): Promise<MpOAuthResponse> {
+  private async exchangeCodeForTokens(
+    code: string,
+    codeVerifier: string,
+  ): Promise<MpOAuthResponse> {
     try {
       if (!this.CLIENT_ID || !this.CLIENT_SECRET || !this.REDIRECT_URI) {
         throw new InternalServerErrorException(
@@ -101,6 +210,8 @@ export class MercadoPagoService {
       body.append('code', code);
       body.append('redirect_uri', this.REDIRECT_URI);
       body.append('grant_type', 'authorization_code');
+      // PKCE: Enviar el code_verifier para que MP pueda validarlo
+      body.append('code_verifier', codeVerifier);
 
       const response = await axios.post<MpOAuthResponse>(tokenUrl, body, {
         headers: {
@@ -109,10 +220,12 @@ export class MercadoPagoService {
       });
 
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      this.logger.error('Error en exchangeCodeForTokens:', error);
       if (axios.isAxiosError(error) && error.response) {
         // Manejar errores como código inválido/expirado
-        const detail = error.response.data.message || 'Error desconocido de MP';
+        const responseData = error.response.data as { message?: string };
+        const detail = responseData?.message || 'Error desconocido de MP';
         throw new UnauthorizedException(
           `Error de OAuth con Mercado Pago: ${detail}`,
         );
@@ -125,22 +238,20 @@ export class MercadoPagoService {
 
   /**
    * 3. Procesa el callback: intercambia el código, cifra y almacena los tokens.
+   * Implementa PKCE enviando el code_verifier al intercambiar tokens.
    * @param code Código de autorización de MP.
    * @param state Token de seguridad para validación.
    */
   async handleOAuthCallback(code: string, state: string): Promise<void> {
-    // 3.1. Validar el estado (Aquí solo se extrae el tenantId, pero en prod, se valida el hash CSRF)
-    const tenantIdFromState = state.split('|')[0];
-    if (!tenantIdFromState) {
-      // NOTA: La validación del tenantId se hace de forma automática si tu Guard de Multi-Tenancy
-      // lo establece en la sesión ANTES de que se ejecute el saveConfig.
-      console.warn(
-        'Advertencia de seguridad: Mismatch de tenantId en el state o falta de validación de CSRF.',
-      );
-    }
+    // 3.1. Validar el state y obtener el tenantId + codeVerifier (PKCE)
+    const { tenantId, codeVerifier } = this.validateState(state);
 
-    // 3.2. Intercambio de códigos por tokens
-    const tokens = await this.exchangeCodeForTokens(code);
+    this.logger.log(`Procesando callback de MP para tenant: ${tenantId}`);
+
+    // 3.2. Intercambio de códigos por tokens (incluye code_verifier para PKCE)
+    const tokens = await this.exchangeCodeForTokens(code, codeVerifier);
+
+    this.logger.log(`Tokens obtenidos para MP user_id: ${tokens.user_id}`);
 
     // 3.3. Cifrado y cálculo de expiración
     const expiryDate = new Date();
@@ -153,14 +264,13 @@ export class MercadoPagoService {
       tokenExpiry: expiryDate,
     };
 
-    // 3.4. Almacenamiento seguro (El RLS/TenantGuard asegura que solo se guarde para el tenant correcto)
-    await this.dbService.runInTransaction(
-      { tenantId: tenantIdFromState },
-      async (tx) => {
-        const repo = MpConfigRepo(tx);
-        await repo.saveConfig(configToStore, tenantIdFromState);
-      },
-    );
+    // 3.4. Almacenamiento seguro
+    await this.dbService.runInTransaction({ tenantId }, async (tx) => {
+      const repo = MpConfigRepo(tx);
+      await repo.saveConfig(configToStore, tenantId);
+    });
+
+    this.logger.log(`Configuración de MP guardada para tenant: ${tenantId}`);
   }
 
   /**
@@ -184,5 +294,136 @@ export class MercadoPagoService {
         expirationDate: config.tokenExpiry,
       };
     });
+  }
+
+  /**
+   * 5. Renueva el Access Token usando el Refresh Token.
+   * Debe llamarse cuando el access_token está por expirar o ha expirado.
+   * @param tenantId UUID del tenant.
+   */
+  async refreshAccessToken(tenantId: string): Promise<void> {
+    // 5.1. Obtener la configuración actual
+    const currentConfig = await this.dbService.runInTransaction(
+      { tenantId },
+      async (tx) => {
+        const repo = MpConfigRepo(tx);
+        return repo.getMpConfigStoreByTenantId(tenantId);
+      },
+    );
+
+    if (!currentConfig || !currentConfig.refreshTokenEnc) {
+      throw new BadRequestException(
+        'No hay configuración de Mercado Pago para este tenant.',
+      );
+    }
+
+    // 5.2. Descifrar el refresh_token
+    const refreshToken = this.decryptToken(currentConfig.refreshTokenEnc);
+
+    // 5.3. Llamar a MP para obtener nuevos tokens
+    try {
+      const tokenUrl = 'https://api.mercadopago.com/oauth/token';
+      const body = new URLSearchParams();
+      body.append('client_id', this.CLIENT_ID || '');
+      body.append('client_secret', this.CLIENT_SECRET || '');
+      body.append('grant_type', 'refresh_token');
+      body.append('refresh_token', refreshToken);
+
+      const response = await axios.post<MpOAuthResponse>(tokenUrl, body, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+
+      const tokens = response.data;
+
+      this.logger.log(`Access token renovado para tenant: ${tenantId}`);
+
+      // 5.4. Cifrar y guardar los nuevos tokens
+      const expiryDate = new Date();
+      expiryDate.setSeconds(expiryDate.getSeconds() + tokens.expires_in);
+
+      const configToStore: MpConfigStore = {
+        mpUserId: tokens.user_id,
+        accessTokenEnc: this.encryptToken(tokens.access_token),
+        refreshTokenEnc: this.encryptToken(tokens.refresh_token),
+        tokenExpiry: expiryDate,
+      };
+
+      await this.dbService.runInTransaction({ tenantId }, async (tx) => {
+        const repo = MpConfigRepo(tx);
+        await repo.saveConfig(configToStore, tenantId);
+      });
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response) {
+        this.logger.error(
+          `Error renovando token de MP: ${JSON.stringify(error.response.data)}`,
+        );
+        throw new UnauthorizedException(
+          'Error al renovar el token de Mercado Pago. Es posible que deba reconectar su cuenta.',
+        );
+      }
+      throw new InternalServerErrorException(
+        'Error de red al renovar el token de MP.',
+      );
+    }
+  }
+
+  /**
+   * Función para descifrar un token.
+   */
+  private decryptToken(encryptedToken: string): string {
+    const decipher = crypto.createDecipheriv(
+      'aes-256-cbc',
+      MOCK_KMS_KEY,
+      MOCK_KMS_KEY.subarray(0, 16),
+    );
+    let decrypted = decipher.update(encryptedToken, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  }
+
+  /**
+   * 6. Obtiene el Access Token descifrado para un tenant (para usar en llamadas a MP API).
+   * Automáticamente renueva si está por expirar.
+   * @param tenantId UUID del tenant.
+   * @returns Access token descifrado.
+   */
+  async getAccessToken(tenantId: string): Promise<string> {
+    const config = await this.dbService.runInTransaction(
+      { tenantId },
+      async (tx) => {
+        const repo = MpConfigRepo(tx);
+        return repo.getMpConfigStoreByTenantId(tenantId);
+      },
+    );
+
+    if (!config || !config.accessTokenEnc) {
+      throw new BadRequestException(
+        'Mercado Pago no está configurado para este negocio.',
+      );
+    }
+
+    // Verificar si el token está por expirar (menos de 1 hora)
+    const now = new Date();
+    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+
+    if (config.tokenExpiry && config.tokenExpiry < oneHourFromNow) {
+      this.logger.log(`Token por expirar, renovando para tenant: ${tenantId}`);
+      await this.refreshAccessToken(tenantId);
+
+      // Obtener el nuevo token
+      const newConfig = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = MpConfigRepo(tx);
+          return repo.getMpConfigStoreByTenantId(tenantId);
+        },
+      );
+
+      return this.decryptToken(newConfig!.accessTokenEnc);
+    }
+
+    return this.decryptToken(config.accessTokenEnc);
   }
 }

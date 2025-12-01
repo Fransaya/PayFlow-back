@@ -201,5 +201,25 @@ export function productRepo(tx: Prisma.TransactionClient) {
         },
       };
     },
+
+    // Metodos internos utilizados para logica de ordenes publicas
+    async getProductsByIds(tenant_id: string, product_ids: string[]) {
+      return tx.product.findMany({
+        where: {
+          tenant_id,
+          product_id: { in: product_ids },
+        },
+      });
+    },
+
+    // Metodo para obtener un producto por id y su variante si la recibe
+    async getProductById(tenant_id: string, product_id: string) {
+      return tx.product.findFirst({
+        where: {
+          tenant_id,
+          product_id,
+        },
+      });
+    },
   };
 }

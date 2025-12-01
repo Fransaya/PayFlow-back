@@ -39,7 +39,6 @@ export class MercadoPagoController {
    * Usa un Guard que verifique la autenticación y el rol de OWNER/ADMIN.
    *
    */
-  //TODO: ver si el middleware aca validaria la seguridad del rol que sea owner -->  en caso de no implementar otro
   @Get('oauth/start')
   @UseGuards(JwtGuard)
   startOAuth(@CurrentUser() user: any) {

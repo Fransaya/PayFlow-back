@@ -35,20 +35,21 @@ export function MpConfigRepo(tx: Prisma.TransactionClient) {
         await tx.mp_config.upsert({
           where: { tenant_id: tenant_id }, // Usa el tenant_id del contexto
           update: {
-            mp_user_id: data.mpUserId,
+            mp_user_id: String(data.mpUserId),
             mp_access_token_enc: data.accessTokenEnc,
             mp_refresh_token_enc: data.refreshTokenEnc,
             mp_token_expiry: data.tokenExpiry,
           },
           create: {
             tenant_id: tenant_id,
-            mp_user_id: data.mpUserId,
+            mp_user_id: String(data.mpUserId),
             mp_access_token_enc: data.accessTokenEnc,
             mp_refresh_token_enc: data.refreshTokenEnc,
             mp_token_expiry: data.tokenExpiry,
           },
         });
       } catch (error) {
+        console.error('DB Error in saveConfig:', error);
         // Manejo de errores específicos de DB o log de error
         throw new InternalServerErrorException(
           'Error al guardar la configuración de Mercado Pago.',

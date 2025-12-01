@@ -2,7 +2,16 @@ import { Prisma } from '@prisma/client';
 
 export function businessRepo(tx: Prisma.TransactionClient) {
   return {
-    async getBusinessInfo(tenant_id: string) {
+    async getBusinessInfo(tenant_id: string): Promise<{
+      tenant_id: string;
+      business_id: string;
+      legal_name: string;
+      cuit: string | null;
+      contact_name: string | null;
+      contact_phone: string | null;
+      address: string | null;
+      logo_url: string | null;
+    } | null> {
       return tx.business.findFirst({
         where: {
           tenant_id,
