@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+
 import {
   Injectable,
   BadRequestException,
@@ -45,7 +48,7 @@ import { GoogleRefreshTokenResponse } from '@src/types/googleToken';
 import { validateInviteToken } from '../utilities/validateInviteToken';
 import { validateInviteTokenEmail } from '../utilities/validateInviteTokenEmail';
 import { validateOwnerRegistrationData } from '../utilities/validateOwnerRegistrationData';
-import { decodeToken, decodeTokenGoogle } from '../utilities/decodeToken';
+import { decodeToken } from '../utilities/decodeToken';
 
 // Metodo de user.service
 import { UserService } from '@src/modules/users/services/user.service';
@@ -549,16 +552,14 @@ export class AuthService {
 
       return {
         description: 'Refresh successful',
-        data: {
-          user_type: userData.user_type,
-          access_token_app,
-          refresh_token_app,
-          access_token_google: newSessionGoogle.access_token,
-          id_token_google: newSessionGoogle.id_token,
-          token_type: 'Bearer',
-          expires_in: this.config.jwt.expiresIn,
-          session,
-        },
+        user_type: userData.user_type,
+        access_token_app,
+        refresh_token_app,
+        access_token_google: newSessionGoogle?.access_token ?? null,
+        id_token_google: newSessionGoogle?.id_token ?? null,
+        token_type: 'Bearer',
+        expires_in: newSessionGoogle?.expires_in ?? this.config.jwt.expiresIn,
+        session,
       };
     } catch (error) {
       this.logger.error(`Failed to refresh session: ${error}`);

@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+
 import {
   Injectable,
   CanActivate,
   ExecutionContext,
-  BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from '@src/modules/auth/services/auth.service';
@@ -31,12 +34,14 @@ export class JwtGuard implements CanActivate {
       }
     }
 
+    // console.log('cookies', request.cookies);
+
     if (!token && request.cookies) {
       token = request.cookies['access_token'];
     }
 
     if (!token) {
-      throw new BadRequestException('Authentication token is required');
+      throw new UnauthorizedException('Authentication token is required');
     }
 
     // Google Token logic

@@ -35,16 +35,16 @@ model business {
 }
 
 model mp_config {
-  mp_config_id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id              String    @db.Uuid @unique // CRÍTICO: Un solo config por tenant
-  mp_user_id             String?   // Collector ID (user_id) del negocio en MP
-  mp_access_token_enc    String?   // Access Token Cifrado
-  mp_refresh_token_enc   String?   // Refresh Token Cifrado
-  mp_token_expiry        DateTime? @db.Timestamptz(6) // Fecha de expiración del access token
-  created_at             DateTime  @default(now()) @db.Timestamptz(6)
+  mp_config_id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id            String    @unique @db.Uuid // CRÍTICO: Un solo config por tenant
+  mp_user_id           String? // Collector ID (user_id) del negocio en MP
+  mp_access_token_enc  String? // Access Token Cifrado
+  mp_refresh_token_enc String? // Refresh Token Cifrado
+  mp_token_expiry      DateTime? @db.Timestamptz(6) // Fecha de expiración del access token
+  created_at           DateTime  @default(now()) @db.Timestamptz(6)
 
   // Relación con el Tenant. Se cambia 'tenants' a 'tenant' para claridad.
-  tenant                 tenant    @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "mp_config_tenant_id_fkey")
+  tenant tenant @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "mp_config_tenant_id_fkey")
 
   @@map("mp_config")
 }
@@ -90,21 +90,36 @@ model category {
 }
 
 model order {
-  order_id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id              String    @db.Uuid
-  source_channel         String?   // WhatsApp, IG, Telegram, Web
-  status                 String    @default("draft") // Se hizo no nulo, siempre debe tener un estado
-  total_amount           Decimal   @default(0) @db.Decimal(12, 2) // Se hizo no nulo
-  currency               String    @default("ARS")
-  cart_json              Json?     // Snapshot opcional de los items del carrito para auditoría
-  mp_preference_id       String?   // ID generado por MP al crear la preferencia
-  mp_merchant_order_id   String?   // ID de Merchant Order de MP
-  created_at             DateTime  @default(now()) @db.Timestamptz(6)
+  order_id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String  @db.Uuid
+  source_channel String? // WhatsApp, IG, Telegram, Web
+  status         String  @default("draft") // Se hizo no nulo, siempre debe tener un estado
+
+  // --- CAMPOS DE CLIENTE ---
+  customer_name  String? // Nombre del cliente al finalizar el pedido
+  customer_phone String? // Teléfono de contacto
+  customer_email String? // Email opcional
+
+  // --- CAMPOS DE ENTREGA ---
+  delivery_method  String? // 'pickup' (Retiro en Local) o 'delivery' (A Domicilio)
+  delivery_address Json? // Detalles de la dirección de entrega (calle, num, piso, etc.)
+
+  // --- CAMPOS DE PAGO ---
+  payment_method String? // 'mercadopago' o 'cash_on_delivery'
+  shipping_cost  Decimal @default(0) @db.Decimal(12, 2) // Costo del envío
+
+  // --- CAMPOS EXISTENTES ---
+  total_amount         Decimal  @default(0) @db.Decimal(12, 2) // Incluye shipping_cost
+  currency             String   @default("ARS")
+  cart_json            Json? // Snapshot opcional de los items del carrito para auditoría
+  mp_preference_id     String? // ID generado por MP al crear la preferencia
+  mp_merchant_order_id String? // ID de Merchant Order de MP
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
 
   // Relaciones
-  tenant                 tenant    @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "orders_tenant_id_fkey")
-  order_item             order_item[]
-  payment                payment[]
+  tenant     tenant       @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction, map: "orders_tenant_id_fkey")
+  order_item order_item[]
+  payment    payment[]
 
   // Índices para optimización y RLS
   @@index([tenant_id], map: "idx_orders_tenant_lookup")
@@ -180,23 +195,23 @@ model product_variant {
 }
 
 model role {
-  role_id     String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id   String     @db.Uuid // <--- AGREGADO: Clave de aislamiento multi-tenant
+  role_id     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String   @db.Uuid // <--- AGREGADO: Clave de aislamiento multi-tenant
   name        String
   description String?
   // CAMBIADO: Array de strings para almacenar permisos granulares (ej: ["product:read", "order:write"])
-  permissions String[]   @db.Text
-  active      Boolean?   @default(true)
-  created_at  DateTime   @default(now()) @db.Timestamptz(6)
+  permissions String[] @db.Text
+  active      Boolean? @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
 
   // Relaciones
-  tenant      tenant     @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
-  user_role   user_role[]
+  tenant    tenant      @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
+  user_role user_role[]
 
-  // Índices
-  @@index([tenant_id])
   // Restricción única para el nombre del rol dentro del mismo tenant
   @@unique([tenant_id, name])
+  // Índices
+  @@index([tenant_id])
 }
 
 model session_app {
@@ -223,27 +238,51 @@ model session_app {
 }
 
 model tenant {
-  tenant_id       String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name            String
-  slug            String          @unique
-  primary_color   String?
-  secondary_color String?
-  custom_domain   String?
-  currency        String?         @default("ARS")
-  plan_status     String?         @default("trial")
-  created_at      DateTime?       @default(now()) @db.Timestamptz(6)
-  business        business[]
-  category        category[]
-  mp_config       mp_config[]
-  order           order[]
-  payment         payment[]
-  product         product[]
-  session_app     session_app[]
-  user_business   user_business[]
-  user_owner      user_owner[]
-  roles              role[]
+  tenant_id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                   String
+  slug                   String            @unique
+  primary_color          String?
+  secondary_color        String?
+  custom_domain          String?
+  currency               String?           @default("ARS")
+  plan_status            String?           @default("trial")
+  allow_cash_on_delivery Boolean?          @default(true) // Permite el pago en efectivo/local
+  created_at             DateTime?         @default(now()) @db.Timestamptz(6)
+  business               business[]
+  category               category[]
+  delivery_config        delivery_config[]
+  mp_config              mp_config[]
+  order                  order[]
+  payment                payment[]
+  product                product[]
+  session_app            session_app[]
+  user_business          user_business[]
+  user_owner             user_owner[]
+  roles                  role[]
 
   @@index([slug], map: "idx_tenants_slug")
+}
+
+// Configuración de métodos de entrega por tenant
+model delivery_config {
+  delivery_config_id String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id          String   @db.Uuid
+  is_active          Boolean  @default(true)
+  type               String // 'pickup' (retiro) o 'delivery' (envío)
+  name               String? // Nombre amigable (ej: "Retiro en la sucursal de Palermo")
+  description        String?
+  base_rate          Decimal  @default(0) @db.Decimal(12, 2) // Tarifa base, puede ser 0
+  settings_json      Json? // Configuración JSON para tarifas más complejas (zonas, radios, min/max)
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime @updatedAt @db.Timestamptz(6)
+
+  // Relación
+  tenant tenant @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
+
+  // Índices para optimización y unicidad
+  @@unique([tenant_id, type]) // Solo una configuración por tipo de entrega por tenant
+  @@index([tenant_id])
+  @@map("delivery_config")
 }
 
 model user_role {

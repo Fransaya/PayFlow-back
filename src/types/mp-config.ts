@@ -10,6 +10,7 @@ export interface MpOAuthResponse {
 
 export interface MpConfigStore {
   mpUserId: string;
+  tenantId: string;
   accessTokenEnc: string;
   refreshTokenEnc: string;
   tokenExpiry: Date;

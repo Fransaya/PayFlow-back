@@ -9,6 +9,12 @@ import { UserOwnerService } from '@src/modules/userOwner/services/userOwner.serv
 import { UserFromJWT } from '@src/types/userFromJWT';
 import { createInviteToken } from '@src/modules/auth/utilities/createInviteToken';
 
+// Modulo y dependencia de server websocket
+import { WebSocketGatewayAdmin } from '@src/websocket/admin/WebSocketGateway';
+
+// Tipos
+import { PaymentNotificationPayload } from '@src/types/notifications';
+
 interface InviteBusinessEmailData {
   employeeEmail: string;
   employeeName: string;
@@ -31,8 +37,10 @@ export class NotificationService {
     private readonly userBusinessService: UserBusinessService,
     private readonly tenantService: TenantService,
     private readonly userOwnerService: UserOwnerService,
+    private readonly webSocketGatewayAdmin: WebSocketGatewayAdmin,
   ) {}
 
+  //* --------------------------------- MODULO NOTIFICACIONES POR EMAIL ---------------------------
   /**
    * Envía email de invitación a un empleado para unirse a la tienda
    */
@@ -122,5 +130,32 @@ export class NotificationService {
     const text = `Hola ${body.name}, has sido invitado.`;
 
     return this.emailService.sendEmailDirect(body.email, subject, html, text);
+  }
+
+  //* ---------------------------------------------------------------------------------------------
+  /**
+   * Enviar de datos mediante websocket.
+   */
+  sendNewOrderNotification(tenantId: string, order: any): void {
+    this.webSocketGatewayAdmin.sendNewOrderNotification(tenantId, order);
+  }
+
+  /**
+   * Enviar notificación de actualización de estado de orden mediante websocket. ( este al cliente ) - despues se va comunicar con messages
+   * @param tenantId
+   * @param order
+   */
+  updateOrderStatusNotification(tenantId: string, order: any): void {
+    this.webSocketGatewayAdmin.sendOrderStatusUpdate(tenantId, order);
+  }
+
+  /**
+   * Enviar notificacion de pago recibido / procesado a cliente admin
+   */
+  sendNewPaymentStatus(
+    tenantId: string,
+    payment: PaymentNotificationPayload,
+  ): void {
+    this.webSocketGatewayAdmin.sendNewPaymentStatus(tenantId, payment);
   }
 }

@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Query,
-  Req,
   Res,
   UnauthorizedException,
   UseGuards,
@@ -18,6 +17,9 @@ import { MercadoPagoService } from '../services/mercado-pago.service';
 
 // Modulo / Middleware de autenticacion
 import { JwtGuard } from '@src/guards/jwt.guard';
+
+// Tipos del user obtenido del decorador
+import { UserFromJWT } from '@src/types/userFromJWT';
 
 // Tipos de express
 import { Request, Response } from 'express';
@@ -41,14 +43,14 @@ export class MercadoPagoController {
    */
   @Get('oauth/start')
   @UseGuards(JwtGuard)
-  startOAuth(@CurrentUser() user: any) {
+  async startOAuth(@CurrentUser() user: UserFromJWT) {
     const tenantId = user.tenant_id || null;
 
     if (!tenantId) {
       throw new UnauthorizedException('Tenant ID no encontrado.');
     }
 
-    const authUrl = this.mercadoPagoService.getOAuthUrl(tenantId);
+    const authUrl = await this.mercadoPagoService.getOAuthUrl(tenantId);
     return { url: authUrl };
   }
 
@@ -58,7 +60,7 @@ export class MercadoPagoController {
   @Get('status')
   @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
-  async getPaymentConfigStatus(@CurrentUser() user: any) {
+  async getPaymentConfigStatus(@CurrentUser() user: UserFromJWT) {
     const tenantId = user.tenant_id;
 
     if (!tenantId) {

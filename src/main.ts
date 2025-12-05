@@ -41,6 +41,7 @@ async function bootstrap() {
       'http://localhost:5173',
       'http://localhost:3000',
       'http://localhost:3001',
+      'https://hc8djq7q-3001.brs.devtunnels.ms',
     ], // Orígenes permitidos
     credentials: true, // Permitir envío de cookies/credenciales
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Métodos HTTP permitidos

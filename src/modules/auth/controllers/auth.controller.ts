@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+
 import {
   Controller,
   Post,
@@ -208,6 +212,9 @@ export class AuthController {
   ) {
     const refreshToken = req.cookies['refresh_token'];
     const googleRefreshToken = req.cookies['google_refresh_token'];
+    // console.log('cookies', req.cookies);
+    // console.log('refreshToken', refreshToken);
+    // console.log('googleRefreshToken', googleRefreshToken);
 
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token not found');
@@ -220,6 +227,8 @@ export class AuthController {
       undefined,
       googleRefreshToken,
     );
+
+    // console.log('refresh result', result);
 
     // Set App tokens cookies
     res.cookie('access_token', result.access_token_app, {

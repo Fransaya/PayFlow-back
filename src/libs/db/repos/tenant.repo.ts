@@ -168,5 +168,37 @@ export function tenantRepo(tx: Prisma.TransactionClient) {
         },
       });
     },
+
+    // Obtener configuración de pago del tenant
+    async getTenantPaymentConfig(tenantId: string) {
+      if (!tenantId?.trim()) throw new Error('Tenant ID is required');
+
+      return await tx.tenant.findUnique({
+        where: { tenant_id: tenantId.trim() },
+        select: {
+          tenant_id: true,
+          allow_cash_on_delivery: true,
+        },
+      });
+    },
+
+    // Actualizar configuración de pago en efectivo del tenant
+    async updateTenantCashOnDelivery(
+      tenantId: string,
+      allow_cash_on_delivery: boolean,
+    ) {
+      if (!tenantId?.trim()) throw new Error('Tenant ID is required');
+
+      return await tx.tenant.update({
+        where: { tenant_id: tenantId.trim() },
+        data: {
+          allow_cash_on_delivery,
+        },
+        select: {
+          tenant_id: true,
+          allow_cash_on_delivery: true,
+        },
+      });
+    },
   };
 }

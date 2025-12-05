@@ -20,3 +20,5 @@ export * from './repos/role.repo';
 // Repos de funcionalidad nivel 2
 export * from './repos/mpConfig.repo';
 export * from './repos/order.repo';
+export * from './repos/payment.repo';
+export * from './repos/deliveryConfig.repo';

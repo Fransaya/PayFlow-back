@@ -4,11 +4,15 @@ import {
   InternalServerErrorException,
   BadRequestException,
   Logger,
+  Inject,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import { MpOAuthResponse, MpConfigStore } from '@src/types/mp-config';
+import Redis from 'ioredis';
+
+import { MercadoPagoConfig, Payment } from 'mercadopago';
 
 import { DbService, MpConfigRepo } from '@src/libs/db';
 
@@ -20,15 +24,16 @@ const MOCK_KMS_KEY = Buffer.from(
   'utf-8',
 );
 
-// Cache temporal para validar el state y PKCE (en producción usar Redis)
+// Prefijo para las keys de OAuth state en Redis
+const OAUTH_STATE_PREFIX = 'mp:oauth:state:';
+// TTL para el state en segundos (10 minutos)
+const OAUTH_STATE_TTL = 10 * 60;
+
 interface OAuthStateData {
   tenantId: string;
   codeVerifier: string; // PKCE: se guarda para enviarlo al intercambiar tokens
-  expiresAt: number;
 }
-const stateCache = new Map<string, OAuthStateData>();
 
-// TODO: continuar desarrollando modulo de mercado pago
 @Injectable()
 export class MercadoPagoService {
   private readonly logger = new Logger(MercadoPagoService.name);
@@ -39,6 +44,7 @@ export class MercadoPagoService {
   constructor(
     private readonly configService: ConfigService,
     private readonly dbService: DbService,
+    @Inject('Redis') private readonly redis: Redis,
   ) {
     this.CLIENT_ID =
       this.configService.get<string>('MERCADOPAGO_CLIENT_ID') || '';
@@ -70,7 +76,7 @@ export class MercadoPagoService {
    * @param tenantId UUID del negocio que inicia la conexión.
    * @returns URL de redirección.
    */
-  getOAuthUrl(tenantId: string): string {
+  async getOAuthUrl(tenantId: string): Promise<string> {
     if (!this.CLIENT_ID || !this.REDIRECT_URI) {
       throw new InternalServerErrorException(
         'Credenciales de Mercado Pago no configuradas.',
@@ -91,12 +97,13 @@ export class MercadoPagoService {
     // PKCE: Generar code_challenge usando SHA256 + Base64URL
     const codeChallenge = this.generateCodeChallenge(codeVerifier);
 
-    // Guardar el state y code_verifier en cache con expiración de 10 minutos
-    const expiresAt = Date.now() + 10 * 60 * 1000;
-    stateCache.set(state, { tenantId, codeVerifier, expiresAt });
-
-    // Limpiar states expirados
-    this.cleanExpiredStates();
+    // Guardar el state y code_verifier en Redis con TTL de 10 minutos
+    const stateData: OAuthStateData = { tenantId, codeVerifier };
+    await this.redis.setex(
+      `${OAUTH_STATE_PREFIX}${state}`,
+      OAUTH_STATE_TTL,
+      JSON.stringify(stateData),
+    );
 
     this.logger.log(`OAuth con PKCE iniciado para tenant: ${tenantId}`);
 
@@ -141,48 +148,47 @@ export class MercadoPagoService {
   }
 
   /**
-   * Limpia los states expirados del cache
-   */
-  private cleanExpiredStates(): void {
-    const now = Date.now();
-    for (const [key, value] of stateCache.entries()) {
-      if (value.expiresAt < now) {
-        stateCache.delete(key);
-      }
-    }
-  }
-
-  /**
-   * Valida el state recibido del callback
+   * Valida el state recibido del callback usando Redis
    * @param state El state recibido de MP
    * @returns El tenantId y codeVerifier si es válido
    * @throws BadRequestException si el state es inválido o expirado
    */
-  validateState(state: string): { tenantId: string; codeVerifier: string } {
-    const cached = stateCache.get(state);
+  async validateState(
+    state: string,
+  ): Promise<{ tenantId: string; codeVerifier: string }> {
+    const redisKey = `${OAUTH_STATE_PREFIX}${state}`;
+    const cachedData = await this.redis.get(redisKey);
 
-    if (!cached) {
+    if (!cachedData) {
       this.logger.warn(`State inválido o no encontrado: ${state}`);
       throw new BadRequestException(
         'State inválido o expirado. Por favor, inicie el proceso nuevamente.',
       );
     }
 
-    if (cached.expiresAt < Date.now()) {
-      stateCache.delete(state);
-      this.logger.warn(`State expirado para tenant: ${cached.tenantId}`);
-      throw new BadRequestException(
-        'La autorización ha expirado. Por favor, inicie el proceso nuevamente.',
-      );
-    }
+    // Eliminar el state usado (one-time use) - Redis lo hace atómico
+    await this.redis.del(redisKey);
 
-    // Eliminar el state usado (one-time use)
-    stateCache.delete(state);
+    const cached = JSON.parse(cachedData) as OAuthStateData;
 
     return {
       tenantId: cached.tenantId,
       codeVerifier: cached.codeVerifier,
     };
+  }
+
+  /**
+   * Obtengo configuracion y datos de Mercado Pago asociado a un tenant por user_id de MP
+   * @param userID ID de usuario de Mercado Pago
+   * @returns Configuracion de Mercado Pago
+   */
+  async getTenantConfigByMpUserId(
+    userID: string,
+  ): Promise<MpConfigStore | null> {
+    return this.dbService.runInTransaction({}, async (tx) => {
+      const repo = MpConfigRepo(tx);
+      return repo.getMpConfigStoreByMpUserId(userID);
+    });
   }
 
   /**
@@ -244,7 +250,7 @@ export class MercadoPagoService {
    */
   async handleOAuthCallback(code: string, state: string): Promise<void> {
     // 3.1. Validar el state y obtener el tenantId + codeVerifier (PKCE)
-    const { tenantId, codeVerifier } = this.validateState(state);
+    const { tenantId, codeVerifier } = await this.validateState(state);
 
     this.logger.log(`Procesando callback de MP para tenant: ${tenantId}`);
 
@@ -259,6 +265,7 @@ export class MercadoPagoService {
 
     const configToStore: MpConfigStore = {
       mpUserId: tokens.user_id,
+      tenantId: tenantId,
       accessTokenEnc: this.encryptToken(tokens.access_token),
       refreshTokenEnc: this.encryptToken(tokens.refresh_token),
       tokenExpiry: expiryDate,
@@ -345,6 +352,7 @@ export class MercadoPagoService {
 
       const configToStore: MpConfigStore = {
         mpUserId: tokens.user_id,
+        tenantId: tenantId,
         accessTokenEnc: this.encryptToken(tokens.access_token),
         refreshTokenEnc: this.encryptToken(tokens.refresh_token),
         tokenExpiry: expiryDate,
@@ -425,5 +433,118 @@ export class MercadoPagoService {
     }
 
     return this.decryptToken(config.accessTokenEnc);
+  }
+
+  /**
+   * 7. Elimina la configuración de Mercado Pago para un tenant (desconexión).
+   */
+  async disconnectMercadoPago(tenantId: string): Promise<void> {
+    await this.dbService.runInTransaction({ tenantId }, async (tx) => {
+      try {
+        await tx.mp_config.deleteMany({
+          where: { tenant_id: tenantId },
+        });
+        this.logger.log(
+          `Configuración de MP eliminada para tenant: ${tenantId}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Error eliminando configuración de MP para tenant ${tenantId}: ${error}`,
+        );
+        throw new InternalServerErrorException(
+          'Error al desconectar Mercado Pago.',
+        );
+      }
+    });
+  }
+
+  /**
+   * 8. Método para crear preferencia de pago en Mercado Pago - asociado a un tenant.
+   * @param tenantId UUID del tenant.
+   * @param preferenceData Datos para crear la preferencia.
+   * @returns Respuesta de la creación de preferencia.
+   */
+  async createPreferencePayment(
+    tenantId: string,
+    preferenceData: any,
+    accessToken: string,
+  ): Promise<any> {
+    try {
+      const response = await axios.post(
+        'https://api.mercadopago.com/checkout/preferences',
+        preferenceData,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      return response.data;
+    } catch (error) {
+      this.logger.error(
+        `Error creando preferencia de pago para tenant ${tenantId}: ${error}`,
+      );
+      throw new InternalServerErrorException(
+        'Error al crear la preferencia de pago en Mercado Pago.',
+      );
+    }
+  }
+
+  /**
+   * 9. Método para obtener información de un pago en Mercado Pago - asociado a un tenant.
+   * Utilizo el sdk interno para mayor compatibilidad.
+   * @param paymentId ID del pago en Mercado Pago.
+   * @param tenantId: UUID del tenant.
+   * @returns Información del pago.
+   */
+  async getPaymentInfo(paymentId: string, tenantId: string): Promise<any> {
+    try {
+      const accessTokenAsociated = await this.getAccessToken(tenantId);
+
+      // if (!accessTokenAsociated) {
+      //   this.logger.warn(
+      //     `No access token for tenant ${tenantId}, cannot process payment`,
+      //   );
+      //   return { status: 'ignored', message: 'No access token for tenant' };
+      // }
+
+      // Configuro SDK de Mercado Pago con el access token del tenant
+      const clientConfig: MercadoPagoConfig = {
+        accessToken: accessTokenAsociated,
+        options: {
+          timeout: 10000, // 10 segundos
+        },
+      };
+
+      const paymentClient = new Payment(clientConfig);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let payment: any | null = null;
+      try {
+        payment = await paymentClient.get({ id: paymentId });
+        if (!payment) {
+          this.logger.warn(
+            `Payment not found: ${paymentId} for tenant ${tenantId}`,
+          );
+          return { status: 'ignored', message: 'Payment not found' };
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error fetching payment ${paymentId} for tenant ${tenantId}: ${error}`,
+        );
+        return { status: 'ignored', message: 'Error fetching payment info' };
+      }
+
+      return payment;
+    } catch (error) {
+      this.logger.error(
+        `Error obteniendo info de pago ${paymentId} para tenant ${tenantId}: ${error}`,
+      );
+      throw new InternalServerErrorException(
+        'Error al obtener la información del pago en Mercado Pago.',
+      );
+    }
   }
 }

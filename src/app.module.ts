@@ -25,6 +25,9 @@ import { RoleModule } from './modules/roles/role.module';
 // Modulo de pagos ( funcionalidad de nivel 2)
 import { MercadoPagoModule } from './payments/MercadoPago/mercado-pago.module';
 import { OrderModule } from './modules/orders/order.module';
+import { PaymentModule } from './payments/payment.module';
+import { WebhookMercadoPagoModule } from './webhooks/mercadoPago/public/webhook.mercadopago.module';
+import { ConfigModule as ConfigInternalModule } from './modules/config/config.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [authConfig] }),
@@ -42,6 +45,9 @@ import { OrderModule } from './modules/orders/order.module';
     UserOwnerModule,
     UserBusinessModule,
     OrderModule,
+    PaymentModule,
+    WebhookMercadoPagoModule,
+    ConfigInternalModule,
   ],
   controllers: [AppController],
   providers: [AppService, DbService, UserService],

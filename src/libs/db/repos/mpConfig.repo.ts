@@ -16,6 +16,7 @@ export function MpConfigRepo(tx: Prisma.TransactionClient) {
 
         return {
           mpUserId: mpConfigStore.mp_user_id || '',
+          tenantId: mpConfigStore.tenant_id || '',
           accessTokenEnc: mpConfigStore.mp_access_token_enc || '',
           refreshTokenEnc: mpConfigStore.mp_refresh_token_enc || '',
           tokenExpiry: mpConfigStore.mp_token_expiry || new Date(),
@@ -54,6 +55,31 @@ export function MpConfigRepo(tx: Prisma.TransactionClient) {
         throw new InternalServerErrorException(
           'Error al guardar la configuración de Mercado Pago.',
         );
+      }
+    },
+
+    /**
+     * Obtengo configuracion de mercado pago asociado a un tenant por user_id de mp
+     */
+    async getMpConfigStoreByMpUserId(
+      mp_user_id: string,
+    ): Promise<MpConfigStore | null> {
+      try {
+        const mpConfigStore = await tx.mp_config.findFirst({
+          where: { mp_user_id: mp_user_id },
+        });
+
+        if (!mpConfigStore) return null;
+
+        return {
+          mpUserId: mpConfigStore.mp_user_id || '',
+          tenantId: mpConfigStore.tenant_id || '',
+          accessTokenEnc: mpConfigStore.mp_access_token_enc || '',
+          refreshTokenEnc: mpConfigStore.mp_refresh_token_enc || '',
+          tokenExpiry: mpConfigStore.mp_token_expiry || new Date(),
+        };
+      } catch (error) {
+        throw new InternalServerErrorException(error);
       }
     },
   };
