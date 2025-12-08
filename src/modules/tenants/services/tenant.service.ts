@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+
 import {
   Injectable,
   ConflictException,
@@ -7,14 +9,25 @@ import {
   Logger,
 } from '@nestjs/common';
 
-import { DbService, tenantRepo, businessRepo } from '@libs/db';
+import {
+  DbService,
+  tenantRepo,
+  businessRepo,
+  socialIntegrationRepo,
+} from '@libs/db';
 import { StorageService } from '@src/storage/storage.service';
+
+import { Prisma } from '@prisma/client';
 
 // Tipos para tenant
 import { TenantUpdate } from '@src/types/tenant';
 
 // DTO
 import { UpdateVisualConfigDto } from '../dto/UpdateVisualConfig.dto';
+
+// Utilidades
+// Funcion para encriptar tokens
+import { encryptToken } from '@src/encryption/services/encryption.service';
 
 @Injectable()
 export class TenantService {
@@ -227,6 +240,112 @@ export class TenantService {
     } catch (error) {
       this.logger.error(`Error getting visual config: ${error}`);
       throw new InternalServerErrorException('Error getting visual config');
+    }
+  }
+
+  //* METODOS DE CONFIGURACION DE INTEGRACIONES SOCIALES *//
+
+  // Obtener todas las integraciones asociadas a un tenant
+  async getSocialIntegrations(tenantId: string) {
+    try {
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = socialIntegrationRepo(tx);
+          return await repo.getSocialIntegrationsByTenant(tenantId);
+        },
+      );
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error getting social integrations: ${error}`);
+      throw new InternalServerErrorException(
+        'Error getting social integrations',
+      );
+    }
+  }
+
+  // Obtener configuración de integración social por canal
+  async getSocialIntegrationByChannel(tenantId: string, channel: string) {
+    try {
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = socialIntegrationRepo(tx);
+          return await repo.getSocialIntegrationByChannel(tenantId, channel);
+        },
+      );
+
+      return response;
+    } catch (error) {
+      this.logger.error(
+        `Error getting social integration by channel: ${error}`,
+      );
+      throw new InternalServerErrorException(
+        'Error getting social integration by channel',
+      );
+    }
+  }
+
+  // Crear o actualizar configuración de integración social
+  async upsertSocialIntegrationConfig(data: {
+    tenant_id: string;
+    channel: string;
+    access_token: string;
+    refresh_token?: string | null;
+    external_id?: string | null;
+    status: string;
+    raw_json: Prisma.InputJsonValue;
+  }) {
+    const { access_token, refresh_token, ...rest } = data;
+    // Encriptar tokens antes de guardarlos
+    const access_token_enc = encryptToken(access_token);
+    let refresh_token_enc: string | null = null;
+    if (refresh_token) {
+      refresh_token_enc = encryptToken(refresh_token);
+    }
+
+    const dataToSave = {
+      ...rest,
+      access_token_enc,
+      refresh_token_enc,
+    };
+
+    try {
+      const response = await this.dbService.runInTransaction(
+        { tenantId: data.tenant_id },
+        async (tx) => {
+          const repo = socialIntegrationRepo(tx);
+          return await repo.upsertConfigSocialIntegration(dataToSave);
+        },
+      );
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error upserting social integration config: ${error}`);
+      throw new InternalServerErrorException(
+        'Error upserting social integration config',
+      );
+    }
+  }
+
+  // Eliminar configuración de integración social
+  async deleteSocialIntegration(tenantId: string, channel: string) {
+    try {
+      const response = await this.dbService.runInTransaction(
+        { tenantId },
+        async (tx) => {
+          const repo = socialIntegrationRepo(tx);
+          return await repo.deleteSocialIntegration(tenantId, channel);
+        },
+      );
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error deleting social integration: ${error}`);
+      throw new InternalServerErrorException(
+        'Error deleting social integration',
+      );
     }
   }
 }

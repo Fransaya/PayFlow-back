@@ -46,7 +46,7 @@ export class OrderService {
   // Obtener estado de orden por ID
   async getOrderStatus(tenantId: string, orderId: string) {
     return this.dbService.runInTransaction({ tenantId }, async (tx) => {
-      return orderRepo(tx).getOrderStatus(orderId);
+      return orderRepo(tx).getPublicOrderById(orderId, tenantId);
     });
   }
 
@@ -61,7 +61,7 @@ export class OrderService {
   async createOrder(tenantId: string, data: any) {
     try {
       // PASO 1: obtengo productos actualizados de la DB para validar precios y existencia
-      const productsIds = data.items.map((item) => item.product_id);
+      const productsIds = data.items.map((item: any) => item.product_id);
       const realProducts = await this.dbService.runInTransaction(
         { tenantId },
         async (tx) => {
@@ -166,6 +166,23 @@ export class OrderService {
             tenant_id: tenantId,
             source_channel: data.source_channel || 'public',
             status: ORDER_STATUS.PENDING_PAYMENT,
+            // Campos de cliente
+            customer_name: data.customer?.name || 'Cliente sin',
+            customer_phone:
+              data.customer?.phone.area_code + data.customer?.phone.number ||
+              null,
+            customer_email: data.customer?.email || null,
+            // Campos de entreg
+            delivery_method: data.delivery_method || 'delivery',
+            delivery_address: JSON.stringify(data.delivery_address) || null, //* esto es porque es JSONB
+
+            // Nota adicional
+            aditional_note: data.aditional_note || null,
+
+            // Campos de pago
+            payment_method: data.payment_method || 'mercado_pago',
+            shipping_cost: data.delivery_fee || 0,
+
             total_amount: realTotal,
             currency: data.currency || 'ARS',
             cart_json: cartJson,
@@ -189,162 +206,201 @@ export class OrderService {
         },
       );
 
+      // 4.1 Extraigo metodo de pago seleccionado para validaciones
+      const paymentMethod = data.payment_method || 'mercado_pago';
+
       // 5- Valido configuracion de mercado pago asociado al tenant  antes de crear order
-      const configStatus =
-        await this.mercadoPagoService.getPaymentConfigStatus(tenantId);
+      if (paymentMethod === 'mercado_pago') {
+        //* LOGICA PARA PAGO CON MERCADO PAGO
+        const configStatus =
+          await this.mercadoPagoService.getPaymentConfigStatus(tenantId);
 
-      // Valido unicamente que este conectado
-      if (!configStatus.isConnected) {
-        this.logger.warn(
-          `Mercado Pago no está configurado para el negocio ${tenantId} - Se intento crear orden ${orderRecord.order_id}`,
+        // Valido unicamente que este conectado
+        if (!configStatus.isConnected) {
+          this.logger.warn(
+            `Mercado Pago no está configurado para el negocio ${tenantId} - Se intento crear orden ${orderRecord.order_id}`,
+          );
+          throw new BadRequestException(
+            'Mercado Pago no está configurado para este negocio.',
+          );
+        }
+
+        // Variable para seteo de datos ( configuracion de mercado pago del negocio )
+
+        // Valido expiracion de token
+        if (
+          configStatus.expirationDate &&
+          configStatus.expirationDate < new Date()
+        ) {
+          //* el access token expiró, el negocio sigue conectado - se realizar proceso de renovacion en background asyncrono
+          this.logger.warn(
+            `Token de Mercado Pago expirado para el negocio ${tenantId} - Se intento crear orden ${orderRecord.order_id}`,
+          );
+          //TODO: implementar logica de renovacion  asyncrona para obtener nuevo access token y utilizarlo para crear preferencia.
+        }
+
+        // Obtengo datos de configuracion para crear preferencia
+        const mpConfig = await this.mercadoPagoService.getAccessToken(tenantId);
+
+        if (!mpConfig) {
+          this.logger.error(
+            `No se pudo obtener configuración de Mercado Pago para el negocio ${tenantId} - Se intento crear orden ${orderRecord.order_id}`,
+          );
+          throw new InternalServerErrorException(
+            'Error obteniendo configuración de Mercado Pago.',
+          );
+        }
+
+        const access_token_mp = mpConfig;
+
+        // Obtengo URL del frontend desde variables de entorno
+        const frontendBaseUrl = this.configService.get<string>(
+          'FRONTEND_BASE_MP_URL',
         );
-        throw new BadRequestException(
-          'Mercado Pago no está configurado para este negocio.',
-        );
-      }
 
-      // Variable para seteo de datos ( configuracion de mercado pago del negocio )
+        // Obtengo info completa del tenant para armar las URLs de callback
+        const tenantInfo = await this.tenantService.getTenantInfo(tenantId);
 
-      // Valido expiracion de token
-      if (
-        configStatus.expirationDate &&
-        configStatus.expirationDate < new Date()
-      ) {
-        //* el access token expiró, el negocio sigue conectado - se realizar proceso de renovacion en background asyncrono
-        this.logger.warn(
-          `Token de Mercado Pago expirado para el negocio ${tenantId} - Se intento crear orden ${orderRecord.order_id}`,
-        );
-        //TODO: implementar logica de renovacion  asyncrona para obtener nuevo access token y utilizarlo para crear preferencia.
-      }
+        if (!tenantInfo) {
+          this.logger.error(
+            `No se pudo obtener información del tenant ${tenantId} - Se intento crear orden ${orderRecord.order_id}`,
+          );
+          throw new InternalServerErrorException(
+            'Error obteniendo información del negocio.',
+          );
+        }
 
-      // Obtengo datos de configuracion para crear preferencia
-      const mpConfig = await this.mercadoPagoService.getAccessToken(tenantId);
+        const slug = tenantInfo.slug || 'default-tenant';
+        const customDomain = tenantInfo.custom_domain || null;
 
-      if (!mpConfig) {
-        this.logger.error(
-          `No se pudo obtener configuración de Mercado Pago para el negocio ${tenantId} - Se intento crear orden ${orderRecord.order_id}`,
-        );
-        throw new InternalServerErrorException(
-          'Error obteniendo configuración de Mercado Pago.',
-        );
-      }
+        const baseReturnUrl = customDomain
+          ? `https://${customDomain}`
+          : `${frontendBaseUrl}/${slug}`;
 
-      const access_token_mp = mpConfig;
+        const notificationUrl = `${this.configService.get<string>(
+          'MERCADOPAGO_WEBHOOK_URL',
+        )}/webhook/mercado-pago/notification`;
 
-      // Obtengo URL del frontend desde variables de entorno
-      const frontendBaseUrl = this.configService.get<string>(
-        'FRONTEND_BASE_MP_URL',
-      );
-
-      // Obtengo info completa del tenant para armar las URLs de callback
-      const tenantInfo = await this.tenantService.getTenantInfo(tenantId);
-
-      if (!tenantInfo) {
-        this.logger.error(
-          `No se pudo obtener información del tenant ${tenantId} - Se intento crear orden ${orderRecord.order_id}`,
-        );
-        throw new InternalServerErrorException(
-          'Error obteniendo información del negocio.',
-        );
-      }
-
-      const slug = tenantInfo.slug || 'default-tenant';
-      const customDomain = tenantInfo.custom_domain || null;
-
-      const baseReturnUrl = customDomain
-        ? `https://${customDomain}`
-        : `${frontendBaseUrl}/${slug}`;
-
-      const notificationUrl = `${this.configService.get<string>(
-        'MERCADOPAGO_WEBHOOK_URL',
-      )}/webhook/mercado-pago/notification`;
-
-      // Estructuro objeto con productos y montos validados para crear preferencia de pago
-      const preferenceData = {
-        payer: {
-          name: data.customer.name,
-          email: data.customer.email,
-          phone: {
-            area_code: data.customer.phone
-              ? data.customer.phone.area_code
-              : '00',
-            number: data.customer.phone
-              ? data.customer.phone.number
-              : '00000000',
+        // Estructuro objeto con productos y montos validados para crear preferencia de pago
+        const preferenceData = {
+          payer: {
+            name: data.customer.name,
+            email: data.customer.email,
+            phone: {
+              area_code: data.customer.phone
+                ? data.customer.phone.area_code
+                : '00',
+              number: data.customer.phone
+                ? data.customer.phone.number
+                : '00000000',
+            },
+            address: {
+              street_name: data.customer.address
+                ? data.customer.address.street_name
+                : 'N/A',
+              street_number: data.customer.address
+                ? data.customer.address.street_number
+                : 0,
+              zip_code: data.customer.address
+                ? data.customer.address.zip_code
+                : 'N/A',
+            },
           },
-          address: {
-            street_name: data.customer.address
-              ? data.customer.address.street_name
-              : 'N/A',
-            street_number: data.customer.address
-              ? data.customer.address.street_number
-              : 0,
-            zip_code: data.customer.address
-              ? data.customer.address.zip_code
-              : 'N/A',
+          items: resolvedItems.map((item) => ({
+            title: item.product_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            currency_id: data.currency,
+          })),
+          total: realTotal,
+          currency: data.currency,
+          external_reference: orderRecord.order_id,
+          back_urls: {
+            success: `${baseReturnUrl}/order/success`,
+            failure: `${baseReturnUrl}/order/failure`,
+            pending: `${baseReturnUrl}/order/pending`,
           },
-        },
-        items: resolvedItems.map((item) => ({
-          title: item.product_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          currency_id: data.currency,
-        })),
-        total: realTotal,
-        currency: data.currency,
-        external_reference: orderRecord.order_id,
-        back_urls: {
-          success: `${baseReturnUrl}/order/success`,
-          failure: `${baseReturnUrl}/order/failure`,
-          pending: `${baseReturnUrl}/order/pending`,
-        },
-        auto_return: 'approved',
-        notification_url: notificationUrl,
-      };
+          auto_return: 'approved',
+          notification_url: notificationUrl,
+        };
 
-      // 5 - creo instancia de pago de mercado pago
-      const preferenceCreated =
-        await this.mercadoPagoService.createPreferencePayment(
-          tenantId,
-          preferenceData,
-          access_token_mp,
-        );
+        // 5 - creo instancia de pago de mercado pago
+        const preferenceCreated =
+          await this.mercadoPagoService.createPreferencePayment(
+            tenantId,
+            preferenceData,
+            access_token_mp,
+          );
 
-      // 6 - actualizo orden con datos de preferencia creada
-      await this.dbService.runInTransaction({ tenantId }, async (tx) => {
-        await orderRepo(tx).updateOrderPaymentInfo(orderRecord.order_id, {
+        // 6 - actualizo orden con datos de preferencia creada
+        await this.dbService.runInTransaction({ tenantId }, async (tx) => {
+          await orderRepo(tx).updateOrderPaymentInfo(orderRecord.order_id, {
+            mp_preference_id: preferenceCreated.id,
+            mp_merchant_order_id: preferenceCreated.merchant_order_id,
+          });
+        });
+
+        // 7- creo instancia de payment en la base de datos ( Payment Service ) - IN PROGRESS
+        await this.paymentService.createPayment({
+          tenant_id: tenantId,
+          order_id: orderRecord.order_id,
+          mp_payment_id: preferenceCreated.id,
+          status: PAYMENTS_STATUS.IN_PROGRESS,
+          method: null,
+          amount: realTotal,
+          currency: data.currency,
+          raw_json: preferenceCreated,
+        });
+
+        // 8- retorno orden creada
+        const orderWithPaymentInfo = {
+          ...orderRecord,
           mp_preference_id: preferenceCreated.id,
           mp_merchant_order_id: preferenceCreated.merchant_order_id,
+        };
+
+        const orderCreated = {
+          init_point: preferenceCreated.init_point,
+          order: orderWithPaymentInfo,
+        };
+        this.notificationService.sendNewOrderNotification(
+          tenantId,
+          orderCreated,
+        );
+
+        return orderCreated;
+      } else {
+        //* LOGICA PARA PAGO CON EFECTIVO
+        // 7- creo instancia de payment en la base de datos ( Payment Service ) - IN PROGRESS
+        await this.paymentService.createPayment({
+          tenant_id: tenantId,
+          order_id: orderRecord.order_id,
+          mp_payment_id: null,
+          status: PAYMENTS_STATUS.IN_PROGRESS,
+          method: null,
+          amount: realTotal,
+          currency: data.currency,
+          raw_json: null,
         });
-      });
 
-      // 7- creo instancia de payment en la base de datos ( Payment Service ) - IN PROGRESS
-      await this.paymentService.createPayment({
-        tenant_id: tenantId,
-        order_id: orderRecord.order_id,
-        mp_payment_id: preferenceCreated.id,
-        status: PAYMENTS_STATUS.IN_PROGRESS,
-        method: null,
-        amount: realTotal,
-        currency: data.currency,
-        raw_json: preferenceCreated,
-      });
+        // 8- retorno orden creada
+        const orderWithPaymentInfo = {
+          ...orderRecord,
+          mp_preference_id: null,
+          mp_merchant_order_id: null,
+        };
 
-      // 8- retorno orden creada
-      const orderWithPaymentInfo = {
-        ...orderRecord,
-        mp_preference_id: preferenceCreated.id,
-        mp_merchant_order_id: preferenceCreated.merchant_order_id,
-      };
+        const orderCreated = {
+          init_point: null,
+          order: orderWithPaymentInfo,
+        };
+        this.notificationService.sendNewOrderNotification(
+          tenantId,
+          orderCreated,
+        );
 
-      const orderCreated = {
-        init_point: preferenceCreated.init_point,
-        order: orderWithPaymentInfo,
-      };
-
-      this.notificationService.sendNewOrderNotification(tenantId, orderCreated);
-
-      return orderCreated;
+        return orderCreated;
+      }
     } catch (error) {
       this.logger.error('Error creando orden:', error);
       throw new InternalServerErrorException('Error creando la orden');

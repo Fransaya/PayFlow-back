@@ -1,0 +1,68 @@
+import { Prisma } from '@prisma/client';
+
+export function configRepo(tx: Prisma.TransactionClient) {
+  return {
+    // Obtener Estado de Configuracion base para un negocio / business
+    async getBusinessConfig(tenant_id: string) {
+      const tenant = await tx.tenant.findUnique({
+        where: { tenant_id },
+        select: {
+          primary_color: true,
+          secondary_color: true,
+          allow_cash_on_delivery: true,
+          plan_status: true,
+        },
+      });
+
+      const business = await tx.business.findFirst({
+        where: { tenant_id },
+      });
+
+      const deliveryConfig = await tx.delivery_config.findMany({
+        where: {
+          tenant_id,
+          is_active: true,
+        },
+      });
+
+      const paymentConfig = await tx.mp_config.findFirst({
+        where: {
+          tenant_id,
+        },
+      });
+
+      return {
+        tenant,
+        business,
+        deliveryConfig,
+        paymentConfig,
+      };
+    },
+
+    // Obtener todas las configuraciones de entrega de un tenant
+    async getPaymentConfigsByTenant(tenant_id: string) {
+      return await tx.tenant.findUnique({
+        where: { tenant_id },
+        select: {
+          allow_cash_on_delivery: true,
+        },
+      });
+    },
+
+    async updatePaymentConfigCashOnDelivery(
+      tenant_id: string,
+      allow_cash_on_delivery: boolean,
+    ) {
+      return await tx.tenant.update({
+        where: { tenant_id },
+        data: {
+          allow_cash_on_delivery,
+        },
+        select: {
+          tenant_id: true,
+          allow_cash_on_delivery: true,
+        },
+      });
+    },
+  };
+}

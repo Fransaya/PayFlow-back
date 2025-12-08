@@ -109,6 +109,7 @@ model order {
   shipping_cost  Decimal @default(0) @db.Decimal(12, 2) // Costo del envío
 
   // --- CAMPOS EXISTENTES ---
+  aditional_note       String?  @db.Text
   total_amount         Decimal  @default(0) @db.Decimal(12, 2) // Incluye shipping_cost
   currency             String   @default("ARS")
   cart_json            Json? // Snapshot opcional de los items del carrito para auditoría
@@ -259,6 +260,7 @@ model tenant {
   user_business          user_business[]
   user_owner             user_owner[]
   roles                  role[]
+  social_integrations     social_integration[]
 
   @@index([slug], map: "idx_tenants_slug")
 }
@@ -292,4 +294,28 @@ model user_role {
   user_business user_business @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "user_roles_user_id_fkey")
 
   @@id([user_id, role_id])
+}
+
+model social_integration {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @map("social_integration_id") @db.Uuid
+  tenant_id               String   @db.Uuid
+  channel                 String // 'whatsapp', 'instagram', 'telegram'
+  
+  // Credenciales cifradas - CRÍTICO: Deben almacenarse cifradas (e.g., con KMS)
+  access_token_enc          String    
+  refresh_token_enc         String? 
+  
+  // Identificadores específicos del proveedor (Meta Business App ID, WhatsApp Phone Number ID, etc.)
+  external_id              String? // Por ejemplo, el WhatsApp Phone Number ID (esencial)
+  
+  status                  String   // 'connected', 'disconnected', 'error'
+  raw_json                 Json?   // Payload completo de Meta/Telegram para debugging
+  
+  created_at               DateTime @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime @updatedAt @db.Timestamptz(6)
+
+  // Relación con el Tenant
+  tenant                  tenant   @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
+  
+  @@unique([tenant_id, channel]) // Solo una integración por canal por tenant
 }

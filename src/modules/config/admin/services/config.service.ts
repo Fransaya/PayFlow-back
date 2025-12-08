@@ -2,13 +2,37 @@
 
 import { Injectable } from '@nestjs/common';
 
-import { DbService, deliveryConfigRepo } from '@src/libs/db';
+import { DbService, deliveryConfigRepo, configRepo } from '@src/libs/db';
 
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ConfigServiceInternal {
   constructor(private readonly dbService: DbService) {}
+
+  async getBusinessConfig(tenant_id: string) {
+    const businessConfig = await this.dbService.runInTransaction(
+      { tenantId: tenant_id },
+      async (tx) => {
+        const repo = configRepo(tx);
+        return await repo.getBusinessConfig(tenant_id);
+      },
+    );
+
+    const responseStructure = {
+      tenant: businessConfig.tenant,
+      business: businessConfig.business,
+      delivery: {
+        actives: businessConfig.deliveryConfig,
+      },
+      payment: {
+        mp_configured: businessConfig.paymentConfig ? true : false,
+        allow_cash_on_delivery: businessConfig.tenant?.allow_cash_on_delivery,
+      },
+    };
+
+    return responseStructure;
+  }
 
   // Metodos asociado a configuraciones de delivery o entrega.
   async getDeliveryConfigsByTenant(tenant_id: string) {
@@ -115,5 +139,25 @@ export class ConfigServiceInternal {
         return await repo.upsertDeliveryConfig(data);
       },
     );
+  }
+
+  async getPaymentConfig(tenantId: string) {
+    return await this.dbService.runInTransaction({ tenantId }, async (tx) => {
+      const repo = configRepo(tx);
+      return await repo.getPaymentConfigsByTenant(tenantId);
+    });
+  }
+
+  async updateTenantCashOnDelivery(
+    tenantId: string,
+    allow_cash_on_delivery: boolean,
+  ) {
+    return await this.dbService.runInTransaction({ tenantId }, async (tx) => {
+      const repo = configRepo(tx);
+      return await repo.updatePaymentConfigCashOnDelivery(
+        tenantId,
+        allow_cash_on_delivery,
+      );
+    });
   }
 }

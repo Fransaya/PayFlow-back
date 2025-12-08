@@ -14,6 +14,7 @@ import { OrderService as OrderAdminService } from '@src/modules/orders/admin/ser
 import { TenantService } from '@src/modules/tenants/services/tenant.service';
 import { PaymentService } from '@src/payments/admin/services/payment.service';
 import { NotificationService } from '@src/modules/notifications/admin/services/notification.service';
+import { NotificationService as NotificationPublicService } from '@src/modules/notifications/public/services/notification.service';
 
 // CONSTANTES MAPEADAS DE ESTADOS
 import {
@@ -53,6 +54,7 @@ export class WebhookMercadoPagoService {
     private readonly tenantService: TenantService,
     private readonly paymentService: PaymentService,
     private readonly notificationService: NotificationService,
+    private readonly notificationPublicService: NotificationPublicService,
   ) {}
 
   private readonly logger = new Logger(WebhookMercadoPagoService.name);
@@ -289,6 +291,12 @@ export class WebhookMercadoPagoService {
       orderId,
       mappedOrderStatus,
       paymentInfo,
+    );
+
+    this.notificationPublicService.updateOrderStatusNotificationPublic(
+      tenantId,
+      orderId,
+      mappedOrderStatus,
     );
 
     this.notificationService.sendNewPaymentStatus(

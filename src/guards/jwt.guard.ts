@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
@@ -9,84 +8,53 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from '@src/modules/auth/services/auth.service';
-import { GoogleTokenService } from '@src/modules/auth/services/google-token.service';
 
+/**
+ * Guard simplificado que SOLO valida el JWT de la aplicación
+ *
+ * IMPORTANTE: Este guard NO valida tokens de Google como fallback.
+ * Una vez que el usuario hace login (Google o local), el sistema emite sus propios JWT.
+ *
+ * Flujo de validación:
+ * 1. Extrae el access_token de las cookies
+ * 2. Valida el token JWT de la aplicación
+ * 3. Si el token es válido, adjunta el usuario al request
+ * 4. Si el token es inválido o expiró, lanza 401 para que el frontend ejecute refresh
+ *
+ * NO intenta validar google_id_token como respaldo.
+ */
 @Injectable()
 export class JwtGuard implements CanActivate {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly googleTokenService: GoogleTokenService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
 
-    // 1. Leer header Authorization o Cookie
-    const authHeader: string = request.headers['authorization'];
-    let token: string | undefined;
+    // 1. Extraer access_token de las cookies
+    const accessToken: string | undefined = request.cookies?.['access_token'];
 
-    // console.log('request', request);
-
-    if (authHeader) {
-      const [scheme, t] = authHeader.split(' ');
-      if (scheme.toLowerCase() === 'bearer') {
-        token = t;
-      }
-    }
-
-    // console.log('cookies', request.cookies);
-
-    if (!token && request.cookies) {
-      token = request.cookies['access_token'];
-    }
-
-    if (!token) {
+    if (!accessToken) {
       throw new UnauthorizedException('Authentication token is required');
     }
 
-    // Google Token logic
-    const authHeaderGoogle: string = request.headers[
-      'x-google-token'
-    ] as string;
-    let googleToken: string | null = null;
-
-    if (authHeaderGoogle) {
-      const [googleScheme, googleTokenValue] = authHeaderGoogle.split(' ');
-      if (googleTokenValue && googleScheme.toLowerCase() === 'bearer') {
-        googleToken = googleTokenValue;
-      }
-    }
-
-    if (!googleToken && request.cookies) {
-      googleToken = request.cookies['google_id_token'];
-    }
-
     try {
-      // 3. Validar y decodificar token JWT
-      const decoded = this.authService.validateJwtToken(token);
+      // 2. Validar y decodificar el JWT de la aplicación
+      const decoded = this.authService.validateJwtToken(accessToken);
 
-      let decodedGoogle: any = null;
-      if (googleToken) {
-        decodedGoogle =
-          await this.googleTokenService.decodeIdToken(googleToken);
-      }
-
-      // 4. Adjuntar usuario al request
+      // 3. Adjuntar usuario decodificado al request
       request.user = decoded;
-      if (googleToken) {
-        request.googleUser = decodedGoogle;
-        request.googleToken = googleToken;
-      }
 
-      return true; // permite continuar
+      return true;
     } catch (err: any) {
+      // 4. Si el token es inválido o expiró, lanzar 401
+      // El frontend interceptará este error y ejecutará el refresh
       if (
         err.name === 'JsonWebTokenError' ||
         err.name === 'TokenExpiredError'
       ) {
         throw new UnauthorizedException('Invalid or expired token');
       }
-      throw err; // BadRequest u otros
+      throw err;
     }
   }
 }

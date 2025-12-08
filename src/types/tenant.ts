@@ -77,3 +77,10 @@ export interface UpdateDeliveryConfigDto {
   base_rate?: Prisma.Decimal | number;
   settings_json?: Prisma.InputJsonValue | null;
 }
+
+// Interface asociada a la configuración de redes sociales del tenant para integraciones
+export interface WhatsappConfig {
+  phone_number: string;
+  access_token: string;
+  refresh_token?: string;
+}

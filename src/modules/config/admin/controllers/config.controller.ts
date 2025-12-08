@@ -28,6 +28,12 @@ export class ConfigController {
 
   constructor(private readonly configService: ConfigServiceInternal) {}
 
+  @Get('business/required')
+  @UseGuards(JwtGuard)
+  async getBusinessConfig(@CurrentUser() user: UserFromJWT) {
+    return await this.configService.getBusinessConfig(user.tenant_id);
+  }
+
   @Get('delivery-configs')
   @UseGuards(JwtGuard)
   async getDeliveryConfigsByTenant(@CurrentUser() user: UserFromJWT) {
@@ -46,18 +52,6 @@ export class ConfigController {
     return await this.configService.getActiveDeliveryConfigs(user.tenant_id);
   }
 
-  @Get('delivery-configs/:id')
-  @UseGuards(JwtGuard)
-  async getDeliveryConfigById(
-    @Param('id') id: string,
-    @CurrentUser() user: UserFromJWT,
-  ) {
-    this.logger.log(
-      `Getting delivery config ${id} for tenant ${user.tenant_id} by user ${user.user_id}`,
-    );
-    return await this.configService.getDeliveryConfigById(id);
-  }
-
   @Get('delivery-configs/type/:type')
   @UseGuards(JwtGuard)
   async getDeliveryConfigByType(
@@ -71,6 +65,37 @@ export class ConfigController {
       user.tenant_id,
       type,
     );
+  }
+
+  @Put('delivery-configs/upsert')
+  @UseGuards(JwtGuard)
+  async upsertDeliveryConfig(
+    @CurrentUser() user: UserFromJWT,
+    @Body() body: any,
+  ) {
+    this.logger.log(
+      `Upserting delivery config for tenant ${user.tenant_id} by user ${user.user_id}`,
+    );
+
+    const object = {
+      tenant_id: user.tenant_id,
+      ...body,
+    };
+
+    return await this.configService.upsertDeliveryConfig(object);
+  }
+
+  // ⚠️ IMPORTANTE: Las rutas con :id deben ir DESPUÉS de las rutas específicas
+  @Get('delivery-configs/:id')
+  @UseGuards(JwtGuard)
+  async getDeliveryConfigById(
+    @Param('id') id: string,
+    @CurrentUser() user: UserFromJWT,
+  ) {
+    this.logger.log(
+      `Getting delivery config ${id} for tenant ${user.tenant_id} by user ${user.user_id}`,
+    );
+    return await this.configService.getDeliveryConfigById(id);
   }
 
   @Post('delivery-configs')
@@ -129,21 +154,27 @@ export class ConfigController {
     return await this.configService.deleteDeliveryConfig(id);
   }
 
-  @Put('delivery-configs/upsert')
+  @Get('payment-config')
   @UseGuards(JwtGuard)
-  async upsertDeliveryConfig(
+  async getPaymentConfig(@CurrentUser() user: UserFromJWT) {
+    this.logger.log(
+      `Getting payment config for tenant ${user.tenant_id} by user ${user.user_id}`,
+    );
+    return await this.configService.getPaymentConfig(user.tenant_id);
+  }
+
+  @Put('payment-config/cash-on-delivery')
+  @UseGuards(JwtGuard)
+  async updateCashOnDeliveryConfig(
     @CurrentUser() user: UserFromJWT,
-    @Body() body: any,
+    @Body() body: { allow_cash_on_delivery: boolean },
   ) {
     this.logger.log(
-      `Upserting delivery config for tenant ${user.tenant_id} by user ${user.user_id}`,
+      `Updating cash on delivery config for tenant ${user.tenant_id} by user ${user.user_id}`,
     );
-
-    const object = {
-      tenant_id: user.tenant_id,
-      ...body,
-    };
-
-    return await this.configService.upsertDeliveryConfig(object);
+    return await this.configService.updateTenantCashOnDelivery(
+      user.tenant_id,
+      body.allow_cash_on_delivery,
+    );
   }
 }

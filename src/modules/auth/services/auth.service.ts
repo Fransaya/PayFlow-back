@@ -30,6 +30,7 @@ import {
   QueryParmsRegisterBusinessDto,
 } from '@src/modules/auth/dto/auth.dto';
 import { UpdateSessionAppDto, SessionAppInternalDto } from '../dto/session.dto';
+import { Response } from 'express';
 
 // Tipos de session
 import { SessionAppCreate } from '@src/types/sesssionApp';
@@ -256,6 +257,7 @@ export class AuthService {
           tenant_id: user_details.tenants.tenant_id,
           provider: userData.provider,
           user_type: userData.user_type,
+          expires_at: new Date().getTime() + 3600 * 1000, // Agregado expires_at
         },
         userData,
         this.config.jwt.expiresIn,
@@ -267,6 +269,7 @@ export class AuthService {
           tenant_id: user_details.tenants.tenant_id,
           provider: userData.provider,
           user_type: userData.user_type,
+          expires_at: new Date().getTime() + 7 * 24 * 60 * 60 * 1000, // Agregado expires_at
         },
         userData,
         this.config.jwt.refreshExpiresIn,
@@ -375,6 +378,7 @@ export class AuthService {
           provider: userData.provider,
           user_type: userData.user_type,
           roles: 'user_role' in user_details ? user_details.user_role : null,
+          expires_at: new Date().getTime() + 3600 * 1000, // Agregado expires_at
         },
         userData,
         this.config.jwt.expiresIn,
@@ -387,6 +391,7 @@ export class AuthService {
           provider: userData.provider,
           user_type: userData.user_type,
           roles: 'user_role' in user_details ? user_details.user_role : null,
+          expires_at: new Date().getTime() + 7 * 24 * 60 * 60 * 1000, // Agregado expires_at
         },
         userData,
         this.config.jwt.refreshExpiresIn,
@@ -516,6 +521,7 @@ export class AuthService {
           tenant_id: user_details.tenants.tenant_id,
           provider: userData.provider,
           user_type: userData.user_type,
+          expires_at: new Date().getTime() + 3600 * 1000, // Agregado expires_at
         },
         userData,
         this.config.jwt.expiresIn,
@@ -527,6 +533,7 @@ export class AuthService {
           tenant_id: user_details.tenants.tenant_id,
           provider: userData.provider,
           user_type: userData.user_type,
+          expires_at: new Date().getTime() + 7 * 24 * 60 * 60 * 1000, // Agregado expires_at
         },
         userData,
         this.config.jwt.refreshExpiresIn,
@@ -891,5 +898,103 @@ export class AuthService {
       this.logger.error(`Failed to validate JWT token: ${error}`);
       throw new UnauthorizedException('Invalid JWT token');
     }
+  }
+
+  // =================== MÉTODOS CENTRALIZADOS DE COOKIES ===================
+  /**
+   * Establece las cookies de autenticación de la aplicación
+   * CRÍTICO: Todas las cookies incluyen path: '/' para que el navegador las envíe en todas las rutas
+   */
+  setAuthCookies(
+    res: Response,
+    accessToken: string,
+    refreshToken: string,
+  ): void {
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    // Cookie de access_token (1 hora)
+    res.cookie('access_token', accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/', // CRÍTICO: Asegurar que la cookie se envíe en todas las rutas
+      maxAge: 1 * 60 * 60 * 1000, // 1 hora
+    });
+
+    // Cookie de refresh_token (7 días)
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/', // CRÍTICO: Asegurar que la cookie se envíe en todas las rutas
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+    });
+  }
+
+  /**
+   * Establece las cookies de tokens de Google
+   * CRÍTICO: Todas las cookies incluyen path: '/' para que el navegador las envíe en todas las rutas
+   */
+  setGoogleTokenCookies(
+    res: Response,
+    accessToken: string,
+    refreshToken: string | null,
+    idToken: string,
+    expiresIn: number,
+  ): void {
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    // Cookie de google_access_token
+    res.cookie('google_access_token', accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/', // CRÍTICO: Asegurar que la cookie se envíe en todas las rutas
+      maxAge: expiresIn * 1000,
+    });
+
+    // Cookie de google_refresh_token (si existe)
+    if (refreshToken) {
+      res.cookie('google_refresh_token', refreshToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        path: '/', // CRÍTICO: Asegurar que la cookie se envíe en todas las rutas
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 días
+      });
+    }
+
+    // Cookie de google_id_token
+    res.cookie('google_id_token', idToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/', // CRÍTICO: Asegurar que la cookie se envíe en todas las rutas
+      maxAge: expiresIn * 1000,
+    });
+  }
+
+  /**
+   * Limpia todas las cookies de autenticación
+   * CRÍTICO: Incluye path: '/' y las mismas opciones de seguridad que al crearlas
+   * para que el navegador las borre correctamente
+   */
+  clearAuthCookies(res: Response): void {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax' as const,
+      path: '/', // CRÍTICO: Debe coincidir con el path usado al crear las cookies
+    };
+
+    // Limpiar cookies de la aplicación
+    res.clearCookie('access_token', cookieOptions);
+    res.clearCookie('refresh_token', cookieOptions);
+
+    // Limpiar cookies de Google
+    res.clearCookie('google_access_token', cookieOptions);
+    res.clearCookie('google_refresh_token', cookieOptions);
+    res.clearCookie('google_id_token', cookieOptions);
   }
 }

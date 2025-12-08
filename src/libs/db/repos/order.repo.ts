@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+
 import { Prisma } from '@prisma/client';
 import { OrdersFilterDto } from '@src/modules/orders/admin/dto/orderFilter.dto';
 
@@ -185,6 +187,10 @@ export function orderRepo(tx: Prisma.TransactionClient) {
       // Campos de entrega
       delivery_method?: string | null;
       delivery_address?: any | null;
+
+      // Nota adicional
+      aditional_note?: string | null;
+
       // Campos de pago
       payment_method?: string | null;
       shipping_cost?: number;
@@ -206,7 +212,10 @@ export function orderRepo(tx: Prisma.TransactionClient) {
           customer_email: data.customer_email || null,
           // Campos de entrega
           delivery_method: data.delivery_method || null,
-          delivery_address: data.delivery_address || undefined,
+          delivery_address: data.delivery_address || null,
+          // Nota adicional
+          aditional_note: data.aditional_note || null,
+
           // Campos de pago
           payment_method: data.payment_method || null,
           shipping_cost: data.shipping_cost ?? 0,
@@ -357,6 +366,19 @@ export function orderRepo(tx: Prisma.TransactionClient) {
         },
         data: {
           status: 'cancelled',
+        },
+      });
+    },
+
+    // Metodos de repositorio publico para obtener informacion de ordenes desde carrito publico por tenant
+    async getPublicOrderById(order_id: string, tenant_id: string) {
+      return tx.order.findFirst({
+        where: {
+          order_id,
+          tenant_id,
+        },
+        include: {
+          order_item: true,
         },
       });
     },

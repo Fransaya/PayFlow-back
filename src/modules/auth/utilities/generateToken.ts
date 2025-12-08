@@ -11,6 +11,7 @@ export function generateToken(
     provider: string;
     user_type: string;
     roles?: any | null;
+    expires_at: number;
   },
   user: { email: string },
   expiresIn: string,
@@ -22,14 +23,12 @@ export function generateToken(
     provider: session.provider,
     user_type: session.user_type,
     roles: session.roles || null,
+    exp: Math.floor(session.expires_at / 1000),
   };
 
-  // Define las opciones y haz un "type assertion"
-  const options: any = {
-    expiresIn,
-  };
-
-  const token = jsonwebtoken.sign(payload, config.jwt.secret, options);
+  // No pasamos expiresIn porque ya tenemos exp en el payload
+  // Si pasamos ambos, JWT lanza error: Bad "options.expiresIn" option the payload already has an "exp" property
+  const token = jsonwebtoken.sign(payload, config.jwt.secret);
 
   return token;
 }

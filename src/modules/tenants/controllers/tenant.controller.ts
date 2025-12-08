@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+
 import {
   Get,
   Patch,
@@ -6,11 +9,14 @@ import {
   HttpStatus,
   UsePipes,
   ValidationPipe,
+  Post,
   Query,
+  Param,
   UseGuards,
   UseFilters,
   Controller,
   HttpException,
+  Delete,
 } from '@nestjs/common';
 import { CurrentUser } from '@src/common/decorators/extractUser.decorator';
 
@@ -145,5 +151,57 @@ export class TenantController {
   async getVisualConfig(@CurrentUser() user: UserFromJWT): Promise<any> {
     const tenantId = user.tenant_id;
     return await this.tenantService.getVisualConfig(tenantId);
+  }
+
+  @Get('social-integrations')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseFilters(HttpExceptionFilter)
+  async getSocialIntegrations(@CurrentUser() user: UserFromJWT): Promise<any> {
+    const tenantId = user.tenant_id;
+    return await this.tenantService.getSocialIntegrations(tenantId);
+  }
+
+  @Get('social-integration/:channel')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseFilters(HttpExceptionFilter)
+  async getSocialIntegrationByChannel(
+    @CurrentUser() user: UserFromJWT,
+    @Param('channel') channel: string,
+  ): Promise<any> {
+    const tenantId = user.tenant_id;
+    return await this.tenantService.getSocialIntegrationByChannel(
+      tenantId,
+      channel,
+    );
+  }
+
+  @Post('social-integration')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseFilters(HttpExceptionFilter)
+  async upsertSocialIntegration(
+    @CurrentUser() user: UserFromJWT,
+    @Body() body: any,
+  ): Promise<any> {
+    const tenantId = user.tenant_id;
+    const dataToSave = {
+      tenant_id: tenantId,
+      ...body,
+    };
+    return await this.tenantService.upsertSocialIntegrationConfig(dataToSave);
+  }
+
+  @Delete('social-integration/:channel')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseFilters(HttpExceptionFilter)
+  async deleteSocialIntegration(
+    @CurrentUser() user: UserFromJWT,
+    @Param('channel') channel: string,
+  ): Promise<any> {
+    const tenantId = user.tenant_id;
+    return await this.tenantService.deleteSocialIntegration(tenantId, channel);
   }
 }

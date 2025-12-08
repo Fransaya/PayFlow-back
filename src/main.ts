@@ -35,14 +35,9 @@ async function bootstrap() {
     prefix: 'v',
   });
 
-  // Configuración CORS con credenciales
+  // Configuración CORS para desarrollo - Acepta cualquier origen
   app.enableCors({
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://hc8djq7q-3001.brs.devtunnels.ms',
-    ], // Orígenes permitidos
+    origin: true, // Acepta cualquier origen
     credentials: true, // Permitir envío de cookies/credenciales
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Métodos HTTP permitidos
     allowedHeaders: [
@@ -55,7 +50,8 @@ async function bootstrap() {
   });
 
   const port = configServive.get<number>('PORT') || 3000;
-  await app.listen(port);
-  console.log(`Listening on ${port}`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`Server listening on http://localhost:${port}`);
+  console.log(`WebSocket available at ws://localhost:${port}`);
 }
 bootstrap();

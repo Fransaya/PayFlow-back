@@ -4,6 +4,7 @@ import { DbService, orderRepo } from '@src/libs/db';
 import { OrdersFilterDto } from '../dto/orderFilter.dto';
 
 import { StorageService } from '@src/storage/storage.service';
+import { NotificationService } from '@src/modules/notifications/public/services/notification.service';
 
 import { ORDER_STATUS } from '@src/constants/app.contants';
 
@@ -13,6 +14,7 @@ export class OrderService {
   constructor(
     private readonly dbService: DbService,
     private readonly storageService: StorageService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private readonly logger = new Logger(OrderService.name + '-Admin');
@@ -100,6 +102,12 @@ export class OrderService {
     if (!tenantId || !orderId) {
       throw new Error('Tenant ID and Order ID are required');
     }
+
+    this.notificationService.updateOrderStatusNotificationPublic(
+      tenantId,
+      orderId,
+      status,
+    );
 
     return this.dbService.runInTransaction({ tenantId }, async (tx) => {
       return orderRepo(tx).updateOrderStatus(orderId, status);

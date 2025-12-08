@@ -59,47 +59,22 @@ export class AuthController {
   ) {
     const result = await this.authService.handleAuthCallback(code);
 
-    // Set Google tokens cookies
-    res.cookie('google_access_token', result.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: result.expires_in * 1000,
-    });
+    // Usar método centralizado para establecer cookies de Google
+    this.authService.setGoogleTokenCookies(
+      res,
+      result.access_token,
+      result.refresh_token || null,
+      result.id_token,
+      result.expires_in,
+    );
 
-    if (result.refresh_token) {
-      res.cookie('google_refresh_token', result.refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days example
-      });
-    }
-
-    if (result.id_token) {
-      res.cookie('google_id_token', result.id_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: result.expires_in * 1000,
-      });
-    }
-
-    // Set App tokens cookies if login was successful
+    // Usar método centralizado para establecer cookies de la App si el login fue exitoso
     if (result.app_session) {
-      res.cookie('access_token', result.app_session.access_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 1 * 60 * 60 * 1000, // 1 hour
-      });
-
-      res.cookie('refresh_token', result.app_session.refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
+      this.authService.setAuthCookies(
+        res,
+        result.app_session.access_token,
+        result.app_session.refresh_token,
+      );
     }
 
     return result;
@@ -144,20 +119,12 @@ export class AuthController {
   ) {
     const result = await this.authService.loginBusinessApp(body, tenantSlug);
 
-    // Set App tokens cookies
-    res.cookie('access_token', result.data.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 1 * 60 * 60 * 1000, // 1 hour
-    });
-
-    res.cookie('refresh_token', result.data.refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    // Usar método centralizado para establecer cookies de la App
+    this.authService.setAuthCookies(
+      res,
+      result.data.access_token,
+      result.data.refresh_token,
+    );
 
     return result;
   }
@@ -165,8 +132,16 @@ export class AuthController {
   @Post('logout')
   @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
-  logout(@CurrentUser() user: UserFromJWT) {
-    return this.authService.logoutApp(user);
+  logout(
+    @CurrentUser() user: UserFromJWT,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = this.authService.logoutApp(user);
+
+    // Usar método centralizado para limpiar todas las cookies
+    this.authService.clearAuthCookies(res);
+
+    return result;
   }
 
   @Post('register-owner')
@@ -203,7 +178,6 @@ export class AuthController {
     return await this.authService.registerBusiness(body, queryParams);
   }
 
-  //TODO: pendiente de implementacion
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
@@ -212,9 +186,6 @@ export class AuthController {
   ) {
     const refreshToken = req.cookies['refresh_token'];
     const googleRefreshToken = req.cookies['google_refresh_token'];
-    // console.log('cookies', req.cookies);
-    // console.log('refreshToken', refreshToken);
-    // console.log('googleRefreshToken', googleRefreshToken);
 
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token not found');
@@ -228,40 +199,22 @@ export class AuthController {
       googleRefreshToken,
     );
 
-    // console.log('refresh result', result);
+    // Usar método centralizado para establecer cookies de la App
+    this.authService.setAuthCookies(
+      res,
+      result.access_token_app,
+      result.refresh_token_app,
+    );
 
-    // Set App tokens cookies
-    res.cookie('access_token', result.access_token_app, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 1 * 60 * 60 * 1000, // 1 hour
-    });
-
-    res.cookie('refresh_token', result.refresh_token_app, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
-
-    // Set Google tokens cookies if present
-    if (result.access_token_google) {
-      res.cookie('google_access_token', result.access_token_google, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: result.expires_in * 1000,
-      });
-    }
-
-    if (result.id_token_google) {
-      res.cookie('google_id_token', result.id_token_google, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: result.expires_in * 1000,
-      });
+    // Usar método centralizado para establecer cookies de Google si están presentes
+    if (result.access_token_google && result.id_token_google) {
+      this.authService.setGoogleTokenCookies(
+        res,
+        result.access_token_google,
+        null, // refresh_token de Google no se renueva en este flujo
+        result.id_token_google,
+        result.expires_in,
+      );
     }
 
     return result;
@@ -279,6 +232,7 @@ export class AuthController {
         provider: user.provider,
         user_type: user.user_type,
         roles: user.roles || null,
+        expires_at: user.exp,
       },
       token: 'authenticated',
     };

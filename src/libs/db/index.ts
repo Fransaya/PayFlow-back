@@ -22,3 +22,5 @@ export * from './repos/mpConfig.repo';
 export * from './repos/order.repo';
 export * from './repos/payment.repo';
 export * from './repos/deliveryConfig.repo';
+export * from './repos/config.repo';
+export * from './repos/socialIntegration.repo';
