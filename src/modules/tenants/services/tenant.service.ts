@@ -154,6 +154,8 @@ export class TenantService {
       // 1. Separar campos: la URL del logo está en 'business' y los colores en 'tenant'.
       const { logo_url, primary_color, secondary_color } = data;
 
+      console.log('Updating visual config with data:', data);
+
       const updatedTenant = await this.dbService.runInTransaction(
         { tenantId },
         async (tx) => {

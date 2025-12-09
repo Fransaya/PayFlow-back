@@ -10,7 +10,6 @@ export class ConfigController {
 
   @Get('tenant-info/:tenantId')
   async getPublicTenantInfoBySlug(@Param('tenantId') tenantId: string) {
-    this.logger.log(`Fetching public tenant info for tenantId: ${tenantId}`);
-    return await this.configService.getDeliveryConfigsActiveByTenant(tenantId);
+    return await this.configService.getConfigActiveByTenantId(tenantId);
   }
 }

@@ -23,6 +23,7 @@ import { MercadoPagoService } from '@src/payments/MercadoPago/services/mercado-p
 import { TenantService } from '@src/modules/tenants/services/tenant.service';
 import { PaymentService } from '@src/payments/admin/services/payment.service';
 import { NotificationService } from '@src/modules/notifications/admin/services/notification.service';
+import { StorageService } from '@src/storage/storage.service';
 
 // Servicio de configuracion para obtener variables de entorno
 import { ConfigService } from '@nestjs/config';
@@ -39,6 +40,7 @@ export class OrderService {
     private readonly configService: ConfigService,
     private readonly paymentService: PaymentService,
     private readonly notificationService: NotificationService,
+    private readonly storageService: StorageService,
   ) {}
 
   private readonly logger = new Logger(OrderService.name + '-Public');
@@ -69,42 +71,130 @@ export class OrderService {
         },
       );
 
-      // PASO 2: Valido y reacalulo los items
-      const validatedItems = data.items.map(async (item) => {
+      // Extraer todos los variant_ids de todos los items
+      const variantsIds: string[] = [];
+      data.items.forEach((item: any) => {
+        if (item.selected_variants && Array.isArray(item.selected_variants)) {
+          item.selected_variants.forEach((variant: any) => {
+            if (variant.variant_id) {
+              variantsIds.push(variant.variant_id);
+            }
+          });
+        }
+      });
+
+      // Obtener variantes reales de la DB si hay IDs
+      let realVariants: any[] = [];
+      if (variantsIds.length > 0) {
+        realVariants = await this.dbService.runInTransaction(
+          { tenantId },
+          async (tx) => {
+            return productVariantRepo(tx).getProductVariantsByIds(variantsIds);
+          },
+        );
+      }
+
+      // PASO 2: Valido y recalculo los items
+      const validatedItems = data.items.map((item: any) => {
         const realProduct = realProducts.find(
           (p) => p.product_id === item.product_id,
         );
+
+        // Validar existencia del producto
         if (!realProduct) {
-          throw new Error(`Producto con ID ${item.product_id} no encontrado`);
+          throw new BadRequestException(
+            `Producto con ID ${item.product_id} no encontrado`,
+          );
         }
 
-        if (!realProduct)
+        // Validar disponibilidad
+        if (!realProduct.visible) {
           throw new BadRequestException(
-            `Producto ${item.product_id} no encontrado`,
+            `Producto "${realProduct.name}" no está disponible`,
           );
-        if (!realProduct.visible)
-          throw new BadRequestException(`Producto no disponible`);
-        if (realProduct.stock && realProduct.stock < item.quantity)
-          throw new BadRequestException(`Stock insuficiente`);
+        }
 
-        // Calculo de precio real (producto + variantes )
-        const realPrice = await this.calculateItemPrice(
-          tenantId,
-          item.product_id,
-          item.variant_id,
-        );
+        // Validar stock del producto
+        if (realProduct.stock !== null && realProduct.stock < item.quantity) {
+          throw new BadRequestException(
+            `Stock insuficiente para "${realProduct.name}". Disponible: ${realProduct.stock}`,
+          );
+        }
+
+        // Calcular precio base del producto
+        let realPrice = Number(realProduct.price);
+
+        // Procesar y validar variantes seleccionadas
+        const validatedVariants: any[] = [];
+        if (item.selected_variants && Array.isArray(item.selected_variants)) {
+          item.selected_variants.forEach((selectedVariant: any) => {
+            const realVariant = realVariants.find(
+              (rv) => rv.variant_id === selectedVariant.variant_id,
+            );
+
+            if (!realVariant) {
+              throw new BadRequestException(
+                `Variante con ID ${selectedVariant.variant_id} no encontrada`,
+              );
+            }
+
+            // Validar que la variante pertenezca al producto
+            if (realVariant.product_id !== item.product_id) {
+              throw new BadRequestException(
+                `La variante "${realVariant.name}" no pertenece al producto "${realProduct.name}"`,
+              );
+            }
+
+            // Validar que la variante esté activa
+            if (!realVariant.active) {
+              throw new BadRequestException(
+                `La variante "${realVariant.name}" no está disponible`,
+              );
+            }
+
+            // Validar stock de la variante
+            if (
+              realVariant.stock !== null &&
+              realVariant.stock < item.quantity
+            ) {
+              throw new BadRequestException(
+                `Stock insuficiente para la variante "${realVariant.name}". Disponible: ${realVariant.stock}`,
+              );
+            }
+
+            // Sumar el price_delta al precio total
+            realPrice += Number(realVariant.price_delta || 0);
+
+            // Guardar información validada de la variante
+            validatedVariants.push({
+              variant_id: realVariant.variant_id,
+              name: realVariant.name,
+              price_delta: Number(realVariant.price_delta || 0),
+              sku: realVariant.sku,
+            });
+          });
+        }
+
+        // console.log('realProduct', realProduct);
+        // console.log('item', item);
+
+        // Calcular subtotal
+        const subtotal = realPrice * item.quantity;
 
         return {
-          ...item,
-          unit_price: realPrice, // ← Precio REAL de la DB
-          subtotal: realPrice * item.quantity,
+          product_id: item.product_id,
+          product_name: realProduct.name,
+          quantity: item.quantity,
+          unit_price: realPrice, // Precio REAL (producto + variantes)
+          subtotal: subtotal,
+          selected_variants: validatedVariants,
+          discount: item.discount || null,
+          image_url: item.image_url || realProduct.image_url || null,
         };
       });
 
-      const resolvedItems = await Promise.all(validatedItems);
-
       // 3. Recalcular total
-      const realTotal = resolvedItems.reduce((sum, i) => sum + i.subtotal, 0);
+      const realTotal = validatedItems.reduce((sum, i) => sum + i.subtotal, 0);
 
       // 3.1 Construir el cart_json con los items validados y datos del customer
       const cartJson = {
@@ -135,16 +225,15 @@ export class OrderService {
               }
             : null,
         },
-        items: resolvedItems.map((item) => ({
+        items: validatedItems.map((item) => ({
           product_id: item.product_id,
-          variant_id: item.variant_id || null,
           name: item.product_name,
-          variant_name: item.variant_name || null,
           quantity: item.quantity,
-          unit_price: item.unit_price,
+          unit_price: item.unit_price, // Precio unitario ya incluye variantes
+          subtotal: item.subtotal,
           currency: data.currency || 'ARS',
-          modifiers: item.selected_variants || [],
-          image_url: item.image_url || null,
+          selected_variants: item.selected_variants, // Array con las variantes validadas
+          image_url: item.image_url || null, //TODO: hacer llamara a storage service para presigned de url
         })),
         subtotal: realTotal,
         discounts: data.discounts || [],
@@ -191,14 +280,17 @@ export class OrderService {
           });
 
           // Crear detalles de orden
-          for (const item of resolvedItems) {
+          for (const item of validatedItems) {
             await orderRepo(tx).createOrderItem({
               order_id: newOrder.order_id,
               product_id: item.product_id,
-              variant_id: item.variant_id || null,
               quantity: item.quantity,
-              unit_price: item.unit_price,
+              unit_price: item.unit_price, // Ya incluye el precio de las variantes
               discount: item.discount || null,
+              selected_variants:
+                item.selected_variants.length > 0
+                  ? item.selected_variants
+                  : null, // Guardar variantes como JSON
             });
           }
 
@@ -212,11 +304,11 @@ export class OrderService {
       // 5- Valido configuracion de mercado pago asociado al tenant  antes de crear order
       if (paymentMethod === 'mercado_pago') {
         //* LOGICA PARA PAGO CON MERCADO PAGO
-        const configStatus =
+        const configData =
           await this.mercadoPagoService.getPaymentConfigStatus(tenantId);
 
         // Valido unicamente que este conectado
-        if (!configStatus.isConnected) {
+        if (!configData.isConnected || !configData.config) {
           this.logger.warn(
             `Mercado Pago no está configurado para el negocio ${tenantId} - Se intento crear orden ${orderRecord.order_id}`,
           );
@@ -225,22 +317,11 @@ export class OrderService {
           );
         }
 
-        // Variable para seteo de datos ( configuracion de mercado pago del negocio )
-
-        // Valido expiracion de token
-        if (
-          configStatus.expirationDate &&
-          configStatus.expirationDate < new Date()
-        ) {
-          //* el access token expiró, el negocio sigue conectado - se realizar proceso de renovacion en background asyncrono
-          this.logger.warn(
-            `Token de Mercado Pago expirado para el negocio ${tenantId} - Se intento crear orden ${orderRecord.order_id}`,
-          );
-          //TODO: implementar logica de renovacion  asyncrona para obtener nuevo access token y utilizarlo para crear preferencia.
-        }
-
         // Obtengo datos de configuracion para crear preferencia
-        const mpConfig = await this.mercadoPagoService.getAccessToken(tenantId);
+        const mpConfig = await this.mercadoPagoService.getAccessToken(
+          tenantId,
+          configData.config,
+        );
 
         if (!mpConfig) {
           this.logger.error(
@@ -281,6 +362,10 @@ export class OrderService {
           'MERCADOPAGO_WEBHOOK_URL',
         )}/webhook/mercado-pago/notification`;
 
+        // Asegura que un pedido no se page 5 horas despues cuando no hay stock.
+        const dateNow = new Date();
+        const dateExpiration = new Date(dateNow.getTime() + 30 * 60000); // Suma 30 minutos
+
         // Estructuro objeto con productos y montos validados para crear preferencia de pago
         const preferenceData = {
           payer: {
@@ -306,15 +391,26 @@ export class OrderService {
                 : 'N/A',
             },
           },
-          items: resolvedItems.map((item) => ({
-            title: item.product_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            currency_id: data.currency,
-          })),
+          items: validatedItems.map((item) => {
+            // Construir título descriptivo incluyendo variantes
+            let title = item.product_name;
+            if (item.selected_variants && item.selected_variants.length > 0) {
+              const variantNames = item.selected_variants
+                .map((v: any) => v.name)
+                .join(', ');
+              title += ` (${variantNames})`;
+            }
+
+            return {
+              title: title,
+              quantity: item.quantity,
+              unit_price: item.unit_price, // Precio con variantes incluidas
+              currency_id: data.currency,
+            };
+          }),
           total: realTotal,
           currency: data.currency,
-          external_reference: orderRecord.order_id,
+          external_reference: orderRecord.order_id + '|' + tenantId,
           back_urls: {
             success: `${baseReturnUrl}/order/success`,
             failure: `${baseReturnUrl}/order/failure`,
@@ -322,6 +418,29 @@ export class OrderService {
           },
           auto_return: 'approved',
           notification_url: notificationUrl,
+          // 3. HARDCODED: Configuraciones de seguridad de cobro
+          binary_mode: true, // ESENCIAL: Solo acepta Aprobado o Rechazado (nada de pendientes)
+          expires: true, // Activa la expiración
+          expiration_date_from: dateNow.toISOString(), // Inicio: Ahora
+          expiration_date_to: dateExpiration.toISOString(),
+          // 4. MIXTO: Aquí entra la configuración
+          payment_methods: {
+            // HARDCODED: Bloqueamos lo que no es inmediato
+            excluded_payment_types: [
+              { id: 'ticket' }, // Chau Rapipago/PagoFácil
+              { id: 'atm' }, // Chau Cajero Automático
+              { id: 'bank_transfer' }, // Chau Transferencia manual (opcional, recomendado bloquear en checkout pro viejo)
+            ],
+
+            // CONFIGURABLE POR EL USUARIO (Inyecta aquí tus variables de configuración)
+            installments: configData.config.maxIntallments || 1, // Por defecto 1, o lo que diga el usuario
+
+            excluded_payment_methods: [
+              // Ejemplo: Si el usuario desactiva AMEX en su panel
+              ...(configData.config.excludedPaymentsTypes || []),
+            ],
+          },
+          statement_descriptor: `PEDILO*${tenantInfo.name.substring(0, 10)}`,
         };
 
         // 5 - creo instancia de pago de mercado pago
@@ -404,48 +523,6 @@ export class OrderService {
     } catch (error) {
       this.logger.error('Error creando orden:', error);
       throw new InternalServerErrorException('Error creando la orden');
-    }
-  }
-
-  // Metodo para el calculo de precio real de un item ( producto + variantes )
-  private async calculateItemPrice(
-    tenant_id: string,
-    product_id: string,
-    variant_id: string,
-  ) {
-    try {
-      const realProduct: any = await this.dbService.runInTransaction(
-        { tenantId: tenant_id },
-        async (tx) => {
-          return productRepo(tx).getProductById(tenant_id, product_id);
-        },
-      );
-
-      let realVariant: any | null = null;
-      if (variant_id) {
-        const variant = await this.dbService.runInTransaction(
-          { tenantId: tenant_id },
-          async (tx) => {
-            return productVariantRepo(tx).getProductVariantByProductId(
-              product_id,
-            );
-          },
-        );
-
-        realVariant = variant;
-      }
-
-      let finalPrice = Number(realProduct.price);
-      if (realVariant) {
-        finalPrice += Number(realVariant.price_delta);
-      }
-
-      return finalPrice;
-    } catch (error) {
-      this.logger.error('Error calculando precio del item:', error);
-      throw new InternalServerErrorException(
-        'Error calculando precio del item',
-      );
     }
   }
 }

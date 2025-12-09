@@ -20,6 +20,8 @@ export function MpConfigRepo(tx: Prisma.TransactionClient) {
           accessTokenEnc: mpConfigStore.mp_access_token_enc || '',
           refreshTokenEnc: mpConfigStore.mp_refresh_token_enc || '',
           tokenExpiry: mpConfigStore.mp_token_expiry || new Date(),
+          maxIntallments: mpConfigStore.max_installments || 1,
+          excludedPaymentsTypes: mpConfigStore.excluded_payment_types || [],
         };
       } catch (error) {
         throw new InternalServerErrorException(error);
@@ -77,9 +79,63 @@ export function MpConfigRepo(tx: Prisma.TransactionClient) {
           accessTokenEnc: mpConfigStore.mp_access_token_enc || '',
           refreshTokenEnc: mpConfigStore.mp_refresh_token_enc || '',
           tokenExpiry: mpConfigStore.mp_token_expiry || new Date(),
+          maxIntallments: mpConfigStore.max_installments || 1,
+          excludedPaymentsTypes: mpConfigStore.excluded_payment_types || [],
         };
       } catch (error) {
         throw new InternalServerErrorException(error);
+      }
+    },
+
+    /**
+     * Obtengo configuracion de mercado pago, de max_installments y excluded_payments_methods por tenant_id
+     */
+    async getPaymentConfigSettings(tenant_id: string) {
+      try {
+        return await tx.mp_config.findUnique({
+          where: {
+            tenant_id,
+          },
+          select: {
+            max_installments: true,
+            excluded_payment_types: true,
+          },
+        });
+      } catch (error) {
+        console.error('DB Error in getPaymentConfigSettings:', error);
+        // Manejo de errores específicos de DB o log de error
+        throw new InternalServerErrorException(
+          'Error al obtener la configuración de Mercado Pago.',
+        );
+      }
+    },
+
+    /**
+     * Actualizo configuracion de mercado pago asociado a un tenant por tenantId, de max_installments y excluded_payment_types
+     */
+    async updateMpConfigSettingsByTenantId(
+      tenant_id: string,
+      max_installments: number,
+      excluded_payment_types: string[],
+    ): Promise<any> {
+      try {
+        return await tx.mp_config.update({
+          where: { tenant_id: tenant_id },
+          data: {
+            max_installments: max_installments,
+            excluded_payment_types: excluded_payment_types,
+          },
+          select: {
+            max_installments: true,
+            excluded_payment_types: true,
+          },
+        });
+      } catch (error) {
+        console.error('DB Error in updateMpConfigSettingsByTenantId:', error);
+        // Manejo de errores específicos de DB o log de error
+        throw new InternalServerErrorException(
+          'Error al actualizar la configuración de Mercado Pago.',
+        );
       }
     },
   };

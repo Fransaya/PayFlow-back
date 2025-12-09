@@ -1,6 +1,8 @@
 import {
   Controller,
   Get,
+  Put,
+  Body,
   Query,
   Res,
   UnauthorizedException,
@@ -121,5 +123,39 @@ export class MercadoPagoController {
         `${this.FRONTEND_BASE_URL}/configuracion/payments?error=mp_token_exchange_failed`,
       );
     }
+  }
+
+  @Get('config-internal')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  async getInternalConfig(@CurrentUser() user: UserFromJWT) {
+    const tenantId = user.tenant_id;
+
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant ID no encontrado.');
+    }
+
+    return this.mercadoPagoService.getPaymentConfigSettings(tenantId);
+  }
+
+  @Put('config-internal')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  async saveInternalConfig(
+    @CurrentUser() user: UserFromJWT,
+    @Body()
+    configData: { maxInstallments: number; excludedPaymentsTypes: string[] },
+  ) {
+    const tenantId = user.tenant_id;
+
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant ID no encontrado.');
+    }
+
+    return this.mercadoPagoService.updatePaymentConfigSettings(
+      tenantId,
+      configData.maxInstallments,
+      configData.excludedPaymentsTypes,
+    );
   }
 }

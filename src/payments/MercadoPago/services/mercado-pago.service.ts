@@ -269,6 +269,8 @@ export class MercadoPagoService {
       accessTokenEnc: this.encryptToken(tokens.access_token),
       refreshTokenEnc: this.encryptToken(tokens.refresh_token),
       tokenExpiry: expiryDate,
+      maxIntallments: 1,
+      excludedPaymentsTypes: null,
     };
 
     // 3.4. Almacenamiento seguro
@@ -285,9 +287,11 @@ export class MercadoPagoService {
    * @param tenantId UUID del tenant.
    * @returns Estado de la conexión.
    */
-  async getPaymentConfigStatus(
-    tenantId: string,
-  ): Promise<{ isConnected: boolean; expirationDate?: Date }> {
+  async getPaymentConfigStatus(tenantId: string): Promise<{
+    isConnected: boolean;
+    expirationDate?: Date;
+    config?: MpConfigStore;
+  }> {
     return this.dbService.runInTransaction({ tenantId }, async (tx) => {
       const repo = MpConfigRepo(tx);
       const config = await repo.getMpConfigStoreByTenantId(tenantId);
@@ -299,6 +303,7 @@ export class MercadoPagoService {
       return {
         isConnected: true,
         expirationDate: config.tokenExpiry,
+        config,
       };
     });
   }
@@ -356,6 +361,8 @@ export class MercadoPagoService {
         accessTokenEnc: this.encryptToken(tokens.access_token),
         refreshTokenEnc: this.encryptToken(tokens.refresh_token),
         tokenExpiry: expiryDate,
+        maxIntallments: currentConfig.maxIntallments,
+        excludedPaymentsTypes: currentConfig.excludedPaymentsTypes,
       };
 
       await this.dbService.runInTransaction({ tenantId }, async (tx) => {
@@ -397,26 +404,15 @@ export class MercadoPagoService {
    * @param tenantId UUID del tenant.
    * @returns Access token descifrado.
    */
-  async getAccessToken(tenantId: string): Promise<string> {
-    const config = await this.dbService.runInTransaction(
-      { tenantId },
-      async (tx) => {
-        const repo = MpConfigRepo(tx);
-        return repo.getMpConfigStoreByTenantId(tenantId);
-      },
-    );
-
-    if (!config || !config.accessTokenEnc) {
-      throw new BadRequestException(
-        'Mercado Pago no está configurado para este negocio.',
-      );
-    }
-
+  async getAccessToken(
+    tenantId: string,
+    configData: MpConfigStore,
+  ): Promise<string> {
     // Verificar si el token está por expirar (menos de 1 hora)
     const now = new Date();
     const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
 
-    if (config.tokenExpiry && config.tokenExpiry < oneHourFromNow) {
+    if (configData.tokenExpiry && configData.tokenExpiry < oneHourFromNow) {
       this.logger.log(`Token por expirar, renovando para tenant: ${tenantId}`);
       await this.refreshAccessToken(tenantId);
 
@@ -432,7 +428,7 @@ export class MercadoPagoService {
       return this.decryptToken(newConfig!.accessTokenEnc);
     }
 
-    return this.decryptToken(config.accessTokenEnc);
+    return this.decryptToken(configData.accessTokenEnc);
   }
 
   /**
@@ -501,14 +497,19 @@ export class MercadoPagoService {
    */
   async getPaymentInfo(paymentId: string, tenantId: string): Promise<any> {
     try {
-      const accessTokenAsociated = await this.getAccessToken(tenantId);
+      const configData = await this.getPaymentConfigStatus(tenantId);
 
-      // if (!accessTokenAsociated) {
-      //   this.logger.warn(
-      //     `No access token for tenant ${tenantId}, cannot process payment`,
-      //   );
-      //   return { status: 'ignored', message: 'No access token for tenant' };
-      // }
+      if (!configData.isConnected || !configData.config) {
+        this.logger.warn(
+          `Mercado Pago no está configurado para el negocio ${tenantId} - No se puede obtener info de pago ${paymentId}`,
+        );
+        return { status: 'ignored', message: 'Mercado Pago no configurado' };
+      }
+
+      const accessTokenAsociated = await this.getAccessToken(
+        tenantId,
+        configData.config,
+      );
 
       // Configuro SDK de Mercado Pago con el access token del tenant
       const clientConfig: MercadoPagoConfig = {
@@ -520,7 +521,6 @@ export class MercadoPagoService {
 
       const paymentClient = new Payment(clientConfig);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let payment: any | null = null;
       try {
         payment = await paymentClient.get({ id: paymentId });
@@ -546,5 +546,41 @@ export class MercadoPagoService {
         'Error al obtener la información del pago en Mercado Pago.',
       );
     }
+  }
+
+  async getPaymentConfigSettings(tenantId: string) {
+    try {
+      return this.dbService.runInTransaction({ tenantId }, async (tx) => {
+        const repo = MpConfigRepo(tx);
+        return repo.getPaymentConfigSettings(tenantId);
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error obteniendo configuracion para tenant ${tenantId}: ${error}`,
+      );
+      throw new InternalServerErrorException(
+        'Error al obtener la configuracion del pago en Mercado Pago.',
+      );
+    }
+  }
+
+  async updatePaymentConfigSettings(
+    tenantId: string,
+    max_installments: number,
+    excluded_payment_methods: string[],
+  ): Promise<any> {
+    const response = await this.dbService.runInTransaction(
+      { tenantId },
+      async (tx) => {
+        const repo = MpConfigRepo(tx);
+        return await repo.updateMpConfigSettingsByTenantId(
+          tenantId,
+          max_installments,
+          excluded_payment_methods,
+        );
+      },
+    );
+
+    return response;
   }
 }

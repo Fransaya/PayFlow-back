@@ -14,4 +14,6 @@ export interface MpConfigStore {
   accessTokenEnc: string;
   refreshTokenEnc: string;
   tokenExpiry: Date;
+  maxIntallments: number;
+  excludedPaymentsTypes: any;
 }

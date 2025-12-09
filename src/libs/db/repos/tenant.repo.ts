@@ -46,6 +46,12 @@ export function tenantRepo(tx: Prisma.TransactionClient) {
           business: {
             select: {
               logo_url: true,
+              contact_name: true,
+              contact_phone: true,
+              address: true,
+              legal_name: true,
+              business_id: true,
+              tenant_id: true,
             },
             take: 1, // Solo el primero si hay múltiples
           },

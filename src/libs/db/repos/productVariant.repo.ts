@@ -8,6 +8,12 @@ export function productVariantRepo(tx: Prisma.TransactionClient) {
       });
     },
 
+    async getProductVariantsByIds(variantIds: string[]) {
+      return tx.product_variant.findMany({
+        where: { variant_id: { in: variantIds } },
+      });
+    },
+
     async createProductVariant(data: {
       product_id: string;
       name: string;

@@ -41,12 +41,24 @@ export function configRepo(tx: Prisma.TransactionClient) {
 
     // Obtener todas las configuraciones de entrega de un tenant
     async getPaymentConfigsByTenant(tenant_id: string) {
-      return await tx.tenant.findUnique({
+      const responseCashConfig = await tx.tenant.findUnique({
         where: { tenant_id },
         select: {
           allow_cash_on_delivery: true,
         },
       });
+
+      const responseMPConfig = await tx.mp_config.findFirst({
+        where: { tenant_id },
+        select: {
+          mp_config_id: true,
+        },
+      });
+
+      return {
+        cash_on_delivery: responseCashConfig?.allow_cash_on_delivery || false,
+        has_mp_config: responseMPConfig ? true : false,
+      };
     },
 
     async updatePaymentConfigCashOnDelivery(

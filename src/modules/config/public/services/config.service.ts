@@ -6,7 +6,7 @@ import { DbService, deliveryConfigRepo, configRepo } from '@src/libs/db';
 export class ConfigServiceInternal {
   constructor(private readonly dbService: DbService) {}
 
-  async getDeliveryConfigsActiveByTenant(tenant_id: string) {
+  async getConfigActiveByTenantId(tenant_id: string) {
     const deliveryConfig = await this.dbService.runInTransaction(
       { tenantId: tenant_id },
       async (tx) => {

@@ -155,7 +155,6 @@ export function orderRepo(tx: Prisma.TransactionClient) {
           order_item: {
             include: {
               product: true,
-              product_variant: true,
             },
           },
         },
@@ -235,20 +234,20 @@ export function orderRepo(tx: Prisma.TransactionClient) {
     async createOrderItem(data: {
       order_id: string;
       product_id: string;
-      variant_id: string | null;
       quantity: number;
       unit_price: number;
       discount: number | null;
+      selected_variants?: any[] | null; // JSON array con las variantes
     }) {
       return tx.order_item.create({
         data: {
           order_id: data.order_id,
           product_id: data.product_id,
-          variant_id: data.variant_id,
           quantity: data.quantity,
           unit_price: data.unit_price,
           discount: data.discount || null,
-        },
+          selected_variants: data.selected_variants || null,
+        } as any, // Type assertion necesario hasta que Prisma Client se actualice
       });
     },
 

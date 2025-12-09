@@ -249,7 +249,7 @@ export class WebhookMercadoPagoService {
 
     // Por ahora el external_reference es directamente el orderId
     // TODO: Si en el futuro cambias el formato, actualizar esta lógica
-    return externalReference;
+    return externalReference.split('|')[0];
   }
 
   /**
