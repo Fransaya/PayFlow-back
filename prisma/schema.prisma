@@ -26,6 +26,7 @@ model business {
   business_id   String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenant_id     String  @db.Uuid
   legal_name    String
+  time_zone     String  @default("America/Argentina/Cordoba")
   cuit          String?
   contact_name  String?
   contact_phone String?
@@ -265,6 +266,7 @@ model tenant {
   user_owner             user_owner[]
   roles                  role[]
   social_integrations     social_integration[]
+  business_hours          business_hours[]
 
   @@index([slug], map: "idx_tenants_slug")
 }
@@ -322,4 +324,14 @@ model social_integration {
   tenant                  tenant   @relation(fields: [tenant_id], references: [tenant_id], onDelete: Cascade, onUpdate: NoAction)
   
   @@unique([tenant_id, channel]) // Solo una integración por canal por tenant
+}
+
+model business_hours {
+  hour_id     String   @id @default(uuid())
+  tenant_id   String   @db.Uuid
+  day_of_week Int      @db.SmallInt // 0-6
+  open_time   DateTime @db.Time // Prisma maneja TIME como Date object (solo hora)
+  close_time  DateTime @db.Time
+
+  tenant      tenant   @relation(fields: [tenant_id], references: [tenant_id])
 }

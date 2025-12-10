@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
 
 import { WebhookMercadoPagoController } from './controllers/webhook.mercadopago.controller';
 import { WebhookMercadoPagoService } from './services/webhook.mercadopago.service';
@@ -9,8 +10,10 @@ import { TenantService } from '@src/modules/tenants/services/tenant.service';
 import { PaymentService } from '@src/payments/admin/services/payment.service';
 import { StorageService } from '@src/storage/storage.service';
 import { NotificationModule } from '@src/modules/notifications/notification.module';
+import { WhatsAppServide } from '@src/messaging/services/whatsapp.service';
 
 @Module({
+  imports: [HttpModule, NotificationModule],
   controllers: [WebhookMercadoPagoController],
   providers: [
     WebhookMercadoPagoService,
@@ -20,7 +23,7 @@ import { NotificationModule } from '@src/modules/notifications/notification.modu
     TenantService,
     PaymentService,
     StorageService,
+    WhatsAppServide,
   ],
-  imports: [NotificationModule],
 })
 export class WebhookMercadoPagoModule {}

@@ -24,3 +24,5 @@ export * from './repos/payment.repo';
 export * from './repos/deliveryConfig.repo';
 export * from './repos/config.repo';
 export * from './repos/socialIntegration.repo';
+export * from './repos/businessHour.repo';
+export * from './repos/analytics.repo';

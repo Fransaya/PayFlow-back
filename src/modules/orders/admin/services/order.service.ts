@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { DbService, orderRepo } from '@src/libs/db';
+import { DbService, orderRepo, tenantRepo } from '@src/libs/db';
 import { OrdersFilterDto } from '../dto/orderFilter.dto';
 
 import { StorageService } from '@src/storage/storage.service';
 import { NotificationService } from '@src/modules/notifications/public/services/notification.service';
+import { WhatsAppServide } from '@src/messaging/services/whatsapp.service';
 
 import { ORDER_STATUS } from '@src/constants/app.contants';
 
@@ -15,6 +16,7 @@ export class OrderService {
     private readonly dbService: DbService,
     private readonly storageService: StorageService,
     private readonly notificationService: NotificationService,
+    private readonly whatsappService: WhatsAppServide,
   ) {}
 
   private readonly logger = new Logger(OrderService.name + '-Admin');
@@ -101,6 +103,41 @@ export class OrderService {
 
     if (!tenantId || !orderId) {
       throw new Error('Tenant ID and Order ID are required');
+    }
+
+    const infoTenant = await this.dbService.runInTransaction(
+      { tenantId },
+      async (tx) => {
+        return tenantRepo(tx).getTenantById(tenantId);
+      },
+    );
+
+    if (!infoTenant) {
+      throw new Error('Tenant not found');
+    }
+
+    const orderInfo = await this.dbService.runInTransaction(
+      {
+        tenantId,
+      },
+      async (tx) => {
+        return orderRepo(tx).getOrderById(orderId);
+      },
+    );
+
+    if (!orderInfo) {
+      throw new Error('Order not found');
+    }
+
+    if (orderInfo.customer_phone !== null) {
+      // Enviar notificación por WhatsApp al cliente sobre el cambio de estado
+      this.whatsappService.sendTemplateMessage(
+        orderInfo.customer_phone,
+        'order_status_update', // Nombre de la plantilla de mensaje en WhatsApp
+        [infoTenant.name, orderId, status],
+        infoTenant.slug,
+        orderId,
+      );
     }
 
     this.notificationService.updateOrderStatusNotificationPublic(

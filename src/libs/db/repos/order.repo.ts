@@ -107,7 +107,17 @@ export function orderRepo(tx: Prisma.TransactionClient) {
       const sortBy = filters?.sort_by ?? 'created_at';
       const sortOrder = filters?.sort_order ?? 'desc';
 
-      const [orders, total] = await Promise.all([
+      // Estados que generan ingresos reales
+      const validRevenueStatuses = [
+        'PAID',
+        'ACCEPTED',
+        'IN_PREPARATION',
+        'READY',
+        'OUT_FOR_DELIVERY',
+        'DELIVERED',
+      ];
+
+      const [orders, total, summary] = await Promise.all([
         tx.order.findMany({
           where,
           orderBy: { [sortBy]: sortOrder },
@@ -118,6 +128,21 @@ export function orderRepo(tx: Prisma.TransactionClient) {
           },
         }),
         tx.order.count({ where }),
+        // Calcular totales solo de pedidos válidos
+        tx.order.aggregate({
+          where: {
+            ...where,
+            status: { in: validRevenueStatuses },
+          },
+          _sum: {
+            total_amount: true,
+            shipping_cost: true,
+          },
+          _count: true,
+          _avg: {
+            total_amount: true,
+          },
+        }),
       ]);
 
       return {
@@ -129,6 +154,12 @@ export function orderRepo(tx: Prisma.TransactionClient) {
           totalPages: Math.ceil(total / limit),
           hasNextPage: page < Math.ceil(total / limit),
           hasPrevPage: page > 1,
+        },
+        summary: {
+          totalRevenue: Number(summary._sum.total_amount || 0),
+          totalShippingCost: Number(summary._sum.shipping_cost || 0),
+          validOrdersCount: summary._count,
+          averageTicket: Number(summary._avg.total_amount || 0),
         },
       };
     },

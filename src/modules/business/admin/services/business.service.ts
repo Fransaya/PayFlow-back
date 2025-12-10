@@ -16,10 +16,13 @@ export class BusinessService {
 
   async getBusiness(tenant_id: string) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = businessRepo(tx);
-        return repo.getBusinessInfo(tenant_id);
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId: tenant_id },
+        async (tx) => {
+          const repo = businessRepo(tx);
+          return repo.getBusinessInfo(tenant_id);
+        },
+      );
 
       return response;
     } catch (error) {
@@ -30,17 +33,20 @@ export class BusinessService {
 
   async createBusiness(tenant_id: string, business: Business) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = businessRepo(tx);
-        return repo.createBusiness({
-          tenant_id,
-          legal_name: business.legal_name,
-          cuit: business.cuit,
-          contact_name: business.contact_name,
-          contact_phone: business.contact_phone,
-          address: business.address,
-        });
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId: tenant_id },
+        async (tx) => {
+          const repo = businessRepo(tx);
+          return repo.createBusiness({
+            tenant_id,
+            legal_name: business.legal_name,
+            cuit: business.cuit,
+            contact_name: business.contact_name,
+            contact_phone: business.contact_phone,
+            address: business.address,
+          });
+        },
+      );
 
       return response;
     } catch (error) {
@@ -55,16 +61,19 @@ export class BusinessService {
     business: Business,
   ) {
     try {
-      const response = await this.dbService.runInTransaction({}, async (tx) => {
-        const repo = businessRepo(tx);
-        return repo.updateBusiness(tenant_id, business_id, {
-          legal_name: business.legal_name,
-          cuit: business.cuit,
-          contact_name: business.contact_name,
-          contact_phone: business.contact_phone,
-          address: business.address,
-        });
-      });
+      const response = await this.dbService.runInTransaction(
+        { tenantId: tenant_id },
+        async (tx) => {
+          const repo = businessRepo(tx);
+          return repo.updateBusiness(tenant_id, business_id, {
+            legal_name: business.legal_name,
+            cuit: business.cuit,
+            contact_name: business.contact_name,
+            contact_phone: business.contact_phone,
+            address: business.address,
+          });
+        },
+      );
 
       return response;
     } catch (error) {

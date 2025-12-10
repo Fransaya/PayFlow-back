@@ -15,6 +15,7 @@ import { AuthModule } from '../auth/auth.module';
 import { GoogleTokenService } from '../auth/services/google-token.service';
 
 import { NotificationModule } from '../notifications/notification.module';
+import { MessagingModule } from '@src/messaging/messaging.module';
 
 @Module({
   controllers: [OrderPublicController, OrderAdminController],
@@ -27,6 +28,6 @@ import { NotificationModule } from '../notifications/notification.module';
     PaymentService,
     GoogleTokenService,
   ],
-  imports: [AuthModule, NotificationModule],
+  imports: [AuthModule, NotificationModule, MessagingModule],
 })
 export class OrderModule {}

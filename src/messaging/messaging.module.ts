@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { WhatsAppServide } from './services/whatsapp.service';
 
 @Module({
   imports: [
+    HttpModule,
     ClientsModule.register([
       {
         name: 'RABBITMQ_SERVICE',
@@ -18,6 +21,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
       },
     ]),
   ],
-  exports: [ClientsModule],
+  providers: [WhatsAppServide],
+  exports: [ClientsModule, WhatsAppServide],
 })
 export class MessagingModule {}

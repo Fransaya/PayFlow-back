@@ -196,6 +196,17 @@ CREATE POLICY roles_access ON public.role
     FOR ALL
     USING (true)  -- Permite acceso a todos los roles
     WITH CHECK (true);
+    
+
+-- =============================================
+-- POLITICAS DE TIMEZONE DE HORARIOS DE NEGOCIO
+-- =============================================
+-- Política para business_timezones
+ALTER TABLE business_hours ENABLE ROW LEVEL SECURITY;
+
+-- Política de Seguridad (Solo ver/editar tus propios horarios)
+CREATE POLICY tenant_isolation_policy ON business_hours
+    USING (tenant_id = current_setting('app.tenant_id')::uuid);
 
 -- =============================================
 -- FUNCIONES DE UTILIDAD PARA RLS
