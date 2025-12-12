@@ -5,7 +5,12 @@ import { OrdersFilterDto } from '../dto/orderFilter.dto';
 
 import { StorageService } from '@src/storage/storage.service';
 import { NotificationService } from '@src/modules/notifications/public/services/notification.service';
-import { WhatsAppServide } from '@src/messaging/services/whatsapp.service';
+import {
+  WhatsAppServide,
+  translateOrderStatus,
+  formatCurrency,
+  getShortOrderId,
+} from '@src/messaging/services/whatsapp.service';
 
 import { ORDER_STATUS } from '@src/constants/app.contants';
 
@@ -131,10 +136,17 @@ export class OrderService {
 
     if (orderInfo.customer_phone !== null) {
       // Enviar notificación por WhatsApp al cliente sobre el cambio de estado
-      this.whatsappService.sendTemplateMessage(
+      // Template: order_status_update requiere 5 parámetros: nombre_cliente, order_id, nombre_negocio, estado, total
+      void this.whatsappService.sendTemplateMessage(
         orderInfo.customer_phone,
-        'order_status_update', // Nombre de la plantilla de mensaje en WhatsApp
-        [infoTenant.name, orderId, status],
+        'order_status_update',
+        [
+          orderInfo.customer_name || 'Cliente', // {{1}} - Nombre del cliente
+          getShortOrderId(orderId), // {{2}} - Order ID (últimos 8 caracteres)
+          infoTenant.name, // {{3}} - Nombre del negocio
+          translateOrderStatus(status), // {{4}} - Estado traducido al español
+          formatCurrency(Number(orderInfo.total_amount)), // {{5}} - Total formateado (ej: $30.000)
+        ],
         infoTenant.slug,
         orderId,
       );

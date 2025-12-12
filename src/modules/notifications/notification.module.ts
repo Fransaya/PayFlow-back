@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { NotificationController } from './admin/controllers/notification.controller';
+import { NotificationController as NotificationAdminController } from './admin/controllers/notification.controller';
 import { NotificationService as NotificationAdminService } from './admin/services/notification.service';
+import { NotificationController as NotificationPublicController } from './public/controllers/notification.controller';
 import { NotificationService as NotificationPublicService } from './public/services/notification.service';
 import { AuthModule } from '../auth/auth.module';
 import { GoogleTokenService } from '../auth/services/google-token.service';
@@ -19,7 +20,7 @@ import { WebSocketGatewayPublic } from '@src/websocket/public/WebSocketPublicGat
 
 @Module({
   imports: [AuthModule, HttpModule],
-  controllers: [NotificationController],
+  controllers: [NotificationAdminController, NotificationPublicController],
   providers: [
     ConfigService,
     NotificationAdminService,

@@ -5,6 +5,42 @@ import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
 
 import { PhoneHelper } from '@src/helpers/phone.helper';
+import { ORDER_STATUS } from '@src/constants/app.contants';
+
+// Helper: Traducir estados de órdenes al español
+export function translateOrderStatus(status: string): string {
+  const translations: Record<string, string> = {
+    [ORDER_STATUS.DRAFT]: 'Borrador',
+    [ORDER_STATUS.PENDING_PAYMENT]: 'Pendiente de pago',
+    [ORDER_STATUS.PAID]: 'Pagado',
+    [ORDER_STATUS.ACCEPTED]: 'Aceptado',
+    [ORDER_STATUS.IN_PREPARATION]: 'En preparación',
+    [ORDER_STATUS.READY]: 'Listo para retirar',
+    [ORDER_STATUS.OUT_FOR_DELIVERY]: 'En camino',
+    [ORDER_STATUS.DELIVERED]: 'Entregado',
+    [ORDER_STATUS.CANCELLED]: 'Cancelado',
+    [ORDER_STATUS.REJECTED]: 'Rechazado',
+    [ORDER_STATUS.REFUNDED]: 'Reembolsado',
+    [ORDER_STATUS.CHARGED_BACK]: 'Contracargo',
+  };
+  return translations[status] || status;
+}
+
+// Helper: Formatear monto en pesos argentinos
+export function formatCurrency(amount: number | string): string {
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(numAmount);
+}
+
+// Helper: Obtener últimos caracteres del ID
+export function getShortOrderId(orderId: string, length: number = 8): string {
+  return orderId.slice(-length).toUpperCase();
+}
 
 @Injectable()
 export class WhatsAppServide {
@@ -18,7 +54,7 @@ export class WhatsAppServide {
   ) {
     const phoneId = this.configService.get<string>('WHATSAPP_PHONE_ID');
     this.token = this.configService.get<string>('WHATSAPP_TOKEN') || '';
-    this.apiUrl = `https://graph.facebook.com/v17.0/${phoneId}`;
+    this.apiUrl = `https://graph.facebook.com/v24.0/${phoneId}`;
   }
 
   async sendTemplateMessage(
@@ -59,7 +95,7 @@ export class WhatsAppServide {
         type: 'template',
         template: {
           name: templateName,
-          language: { code: 'es_AR' },
+          language: { code: 'en' },
           components: [
             {
               type: 'body',
@@ -72,7 +108,7 @@ export class WhatsAppServide {
               parameters: [
                 {
                   type: 'text',
-                  text: `https://hc8djq7q-3001.brs.devtunnels.ms/${slug_tenant}/order/tracking/${order_id}`, // Ejemplo de URL, puede ser dinámico
+                  text: `${slug_tenant}/order/tracking/${order_id}`, // {{1}} - sufijo completo
                 },
               ],
             },
@@ -95,6 +131,7 @@ export class WhatsAppServide {
       );
       return { success: true, data };
     } catch (err) {
+      // console.log('complete error', err);
       const error = err as AxiosError<{
         error?: { message?: string; code?: string };
       }>;

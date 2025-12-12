@@ -81,7 +81,7 @@ export class NotificationService {
       const inviteToken = createInviteToken({
         tenant_id: userOwnerData.tenant_id,
         role_id: '0',
-        expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
+        expires_at: Math.floor(Date.now() / 1000) + 48 * 60 * 60,
         email_asociated: data.email,
         status: 'pending',
       });
@@ -93,7 +93,7 @@ export class NotificationService {
         storeName: tenantInfo.name,
         ownerName: userOwnerInfo.name,
         inviteUrl: `${process.env.FRONTEND_URL}/register-business?tenantId=${userOwnerData.tenant_id}&userId=${userInfoCompleteForTenant.user_id}&invite_token=${inviteToken}`,
-        roleName: 'test',
+        roleName: 'Ninguno asignado',
         expiresIn: '48 horas',
         primaryColor: tenantInfo.primary_color || '#000000',
         secondaryColor: tenantInfo.secondary_color || '#000000',
@@ -101,12 +101,15 @@ export class NotificationService {
       };
       const subject = `Invitación a unirte a ${tenantInfo.name}`;
 
-      await this.emailService.sendEmail({
-        to: emailData.employeeEmail,
-        subject,
-        template: 'invite-business',
-        context: emailData,
-      });
+      await this.emailService.sendEmail(
+        {
+          to: emailData.employeeEmail,
+          subject,
+          template: 'invite-business',
+          context: emailData,
+        },
+        'soporte',
+      );
 
       this.logger.log(
         `Invite email sent to ${emailData.employeeEmail} for ${emailData.storeName}`,
@@ -129,7 +132,13 @@ export class NotificationService {
     const html = `<h1>Hola ${body.name}</h1><p>Has sido invitado.</p>`;
     const text = `Hola ${body.name}, has sido invitado.`;
 
-    return this.emailService.sendEmailDirect(body.email, subject, html, text);
+    return this.emailService.sendEmailDirect(
+      body.email,
+      subject,
+      html,
+      text,
+      'soporte', //TODO ver esto en donde deberia cambiarse
+    );
   }
 
   //* ---------------------------------------------------------------------------------------------

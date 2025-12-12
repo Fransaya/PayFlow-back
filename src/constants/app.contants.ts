@@ -48,3 +48,9 @@ export const PAYMENTS_STATUS_MERCADO_PAGO: Record<string, string> = {
   refunded: 'REFUNDED',
   charged_back: 'CHARGED_BACK',
 };
+
+export const EMAIL_CONTRAINTS_ACCEPTED = {
+  privacidad: 'legal@pedilo.ap',
+  beta: 'beta@pedilo.app',
+  soporte: 'soporte@pedilo.app',
+};

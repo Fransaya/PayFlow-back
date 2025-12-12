@@ -47,16 +47,87 @@ export class OrderService {
 
   // Obtener estado de orden por ID
   async getOrderStatus(tenantId: string, orderId: string) {
-    return this.dbService.runInTransaction({ tenantId }, async (tx) => {
-      return orderRepo(tx).getPublicOrderById(orderId, tenantId);
-    });
+    const response = await this.dbService.runInTransaction(
+      { tenantId },
+      async (tx) => {
+        return orderRepo(tx).getPublicOrderById(orderId, tenantId);
+      },
+    );
+
+    // Presignar URLs de imágenes en los items del carrito
+    if (response?.cart_json && typeof response.cart_json === 'object') {
+      const cartJson = response.cart_json as any;
+
+      if (cartJson.items && Array.isArray(cartJson.items)) {
+        const itemsWithSignedUrls = await Promise.all(
+          cartJson.items.map(async (item: any) => {
+            if (item.image_url) {
+              try {
+                const signedUrl = await this.storageService.getPresignedGetUrl(
+                  item.image_url,
+                );
+                return {
+                  ...item,
+                  image_url: signedUrl, // Reemplazar con URL firmada
+                };
+              } catch {
+                this.logger.warn(
+                  `No se pudo firmar URL para imagen: ${item.image_url}`,
+                );
+                return item; // Retornar sin cambios si falla
+              }
+            }
+            return item;
+          }),
+        );
+
+        cartJson.items = itemsWithSignedUrls;
+      }
+    }
+
+    return response;
   }
 
   // Obtener detalle completo de la orden, por ID
   async getOrderDetails(tenantId: string, orderId: string) {
-    return this.dbService.runInTransaction({ tenantId }, async (tx) => {
-      return orderRepo(tx).getOrderDetails(orderId);
-    });
+    const response = await this.dbService.runInTransaction(
+      { tenantId },
+      async (tx) => {
+        return orderRepo(tx).getOrderDetails(orderId);
+      },
+    );
+
+    // Presignar URLs de imágenes en los items de la orden
+    if (response?.order_item && Array.isArray(response.order_item)) {
+      const itemsWithSignedUrls = await Promise.all(
+        response.order_item.map(async (item: any) => {
+          if (item.product?.image_url) {
+            try {
+              const signedUrl = await this.storageService.getPresignedGetUrl(
+                item.product.image_url,
+              );
+              return {
+                ...item,
+                product: {
+                  ...item.product,
+                  image_url: signedUrl,
+                },
+              };
+            } catch {
+              this.logger.warn(
+                `No se pudo firmar URL para imagen: ${item.product.image_url}`,
+              );
+              return item;
+            }
+          }
+          return item;
+        }),
+      );
+
+      response.order_item = itemsWithSignedUrls;
+    }
+
+    return response;
   }
 
   // Crear orden
