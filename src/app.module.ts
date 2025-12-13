@@ -29,6 +29,7 @@ import { PaymentModule } from './payments/payment.module';
 import { WebhookMercadoPagoModule } from './webhooks/mercadoPago/public/webhook.mercadopago.module';
 import { ConfigModule as ConfigInternalModule } from './modules/config/config.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { SystemFlagsModule } from './modules/systemFlags/system-flags.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [authConfig] }),
@@ -50,6 +51,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     WebhookMercadoPagoModule,
     ConfigInternalModule,
     AnalyticsModule,
+    SystemFlagsModule,
   ],
   controllers: [AppController],
   providers: [AppService, DbService, UserService],

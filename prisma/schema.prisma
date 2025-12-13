@@ -85,6 +85,14 @@ model user_owner {
   @@index([tenant_id], map: "idx_user_owner_tenant")
 }
 
+/// Tabla para banderas globales del sistema (ej: mantenimiento)
+model system_flags {
+  key        String   @id @db.VarChar(50)
+  is_active  Boolean  @default(false)
+  message    String?  @db.VarChar(255)
+  updated_at DateTime @default(now()) @updatedAt
+}
+
 model category {
   category_id String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenant_id   String    @db.Uuid
