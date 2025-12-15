@@ -43,6 +43,7 @@ export function tenantRepo(tx: Prisma.TransactionClient) {
           secondary_color: true,
           custom_domain: true,
           created_at: true,
+          status_tenant: true,
           business: {
             select: {
               logo_url: true,
@@ -72,6 +73,8 @@ export function tenantRepo(tx: Prisma.TransactionClient) {
           secondary_color: true,
           custom_domain: true,
           plan_status: true,
+          status_tenant: true,
+          allow_cash_on_delivery: true,
           created_at: true,
         },
       });

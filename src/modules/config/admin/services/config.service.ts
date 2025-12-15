@@ -29,6 +29,7 @@ export class ConfigServiceInternal {
         mp_configured: businessConfig.paymentConfig ? true : false,
         allow_cash_on_delivery: businessConfig.tenant?.allow_cash_on_delivery,
       },
+      hoursConfig: businessConfig.hoursConfig,
     };
 
     return responseStructure;

@@ -85,10 +85,14 @@ function buildAmountFilter(minAmount?: number, maxAmount?: number) {
 export function orderRepo(tx: Prisma.TransactionClient) {
   return {
     // Metodo para obtener todas las ordenes con filtros opcionales
-    async getAllOrders(filters?: OrdersFilterDto) {
+    async getAllOrders(tenantId: string, filters?: OrdersFilterDto) {
+      if (!tenantId) {
+        throw new Error('Tenant ID is required to fetch orders.');
+      }
+
       // Construir filtros dinámicamente
       const where: Prisma.orderWhereInput = {
-        ...(filters?.tenant_id && { tenant_id: filters.tenant_id }),
+        tenant_id: tenantId, // Asegurar que el filtro de tenant_id siempre se aplique
         ...(filters?.status && { status: filters.status }),
         ...(filters?.source_channel && {
           source_channel: filters.source_channel,

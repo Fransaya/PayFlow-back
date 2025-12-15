@@ -63,7 +63,6 @@ export class TenantService {
           return repo.getTenantById(tenantId);
         },
       );
-
       return response;
     } catch (error) {
       this.logger.error(`Error getting tenant info: ${error}`);

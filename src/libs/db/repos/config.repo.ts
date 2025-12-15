@@ -31,11 +31,18 @@ export function configRepo(tx: Prisma.TransactionClient) {
         },
       });
 
+      const hoursConfig = await tx.business_hours.findFirst({
+        where: {
+          tenant_id,
+        },
+      });
+
       return {
         tenant,
         business,
         deliveryConfig,
         paymentConfig,
+        hoursConfig,
       };
     },
 

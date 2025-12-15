@@ -15,16 +15,12 @@ function formatTime(date: Date): string {
 function parseTime(timeString: string): Date {
   // Asegurar formato HH:mm:ss
   const timeParts = timeString.split(':');
-  const hours = timeParts[0].padStart(2, '0');
-  const minutes = timeParts[1].padStart(2, '0');
-  const seconds = timeParts[2] || '00';
+  const hours = parseInt(timeParts[0], 10);
+  const minutes = parseInt(timeParts[1], 10);
+  const seconds = parseInt(timeParts[2] || '0', 10);
 
-  // Usar fecha local sin conversión de zona horaria
-  const date = new Date();
-  date.setHours(parseInt(hours, 10));
-  date.setMinutes(parseInt(minutes, 10));
-  date.setSeconds(parseInt(seconds, 10));
-  date.setMilliseconds(0);
+  // Crear fecha en UTC sin aplicar zona horaria local
+  const date = new Date(Date.UTC(1970, 0, 1, hours, minutes, seconds));
 
   return date;
 }

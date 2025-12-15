@@ -29,7 +29,7 @@ export class OrderService {
   // Obtener todas las órdenes
   async getAllOrders(tenantId: string, filters?: OrdersFilterDto) {
     return await this.dbService.runInTransaction({ tenantId }, async (tx) => {
-      return orderRepo(tx).getAllOrders(filters);
+      return orderRepo(tx).getAllOrders(tenantId, filters);
     });
   }
 
