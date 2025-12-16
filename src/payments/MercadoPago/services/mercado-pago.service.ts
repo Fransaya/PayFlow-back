@@ -16,11 +16,10 @@ import { MercadoPagoConfig, Payment } from 'mercadopago';
 
 import { DbService, MpConfigRepo } from '@src/libs/db';
 
-// NOTE: En un entorno de producción, usa AWS KMS/Vault para el cifrado real.
-// Este es un placeholder SÓLO para demostrar la lógica.
-// La clave DEBE ser exactamente 32 bytes para AES-256
+import { Prisma } from '@prisma/client';
+
 const MOCK_KMS_KEY = Buffer.from(
-  process.env.KMS_MOCK_KEY_32_BYTES || '12345678901234567890123456789012', // Exactamente 32 caracteres
+  process.env.KMS_MOCK_KEY_32_BYTES || crypto.randomBytes(32).toString('hex'),
   'utf-8',
 );
 
@@ -248,9 +247,19 @@ export class MercadoPagoService {
    * @param code Código de autorización de MP.
    * @param state Token de seguridad para validación.
    */
-  async handleOAuthCallback(code: string, state: string): Promise<void> {
+  async handleOAuthCallback(
+    code: string,
+    state: string,
+    user_tenantId: string,
+  ): Promise<{ status: string; message: string }> {
     // 3.1. Validar el state y obtener el tenantId + codeVerifier (PKCE)
     const { tenantId, codeVerifier } = await this.validateState(state);
+
+    if (tenantId !== user_tenantId) {
+      throw new UnauthorizedException(
+        'El tenant ID no coincide con el usuario autenticado.',
+      );
+    }
 
     this.logger.log(`Procesando callback de MP para tenant: ${tenantId}`);
 
@@ -280,6 +289,11 @@ export class MercadoPagoService {
     });
 
     this.logger.log(`Configuración de MP guardada para tenant: ${tenantId}`);
+
+    return {
+      status: 'success',
+      message: 'Configuración de MP guardada exitosamente.',
+    };
   }
 
   /**
@@ -313,7 +327,11 @@ export class MercadoPagoService {
    * Debe llamarse cuando el access_token está por expirar o ha expirado.
    * @param tenantId UUID del tenant.
    */
-  async refreshAccessToken(tenantId: string): Promise<void> {
+  async refreshAccessToken(tenantId: string): Promise<{
+    status: string;
+    message: string;
+    data?: { access_token: string; user_id: string };
+  }> {
     // 5.1. Obtener la configuración actual
     const currentConfig = await this.dbService.runInTransaction(
       { tenantId },
@@ -362,6 +380,7 @@ export class MercadoPagoService {
         refreshTokenEnc: this.encryptToken(tokens.refresh_token),
         tokenExpiry: expiryDate,
         maxIntallments: currentConfig.maxIntallments,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         excludedPaymentsTypes: currentConfig.excludedPaymentsTypes,
       };
 
@@ -369,6 +388,14 @@ export class MercadoPagoService {
         const repo = MpConfigRepo(tx);
         await repo.saveConfig(configToStore, tenantId);
       });
+      return {
+        status: 'success',
+        message: 'Access token renovado y guardado exitosamente.',
+        data: {
+          access_token: tokens.access_token,
+          user_id: tokens.user_id,
+        },
+      };
     } catch (error: unknown) {
       if (axios.isAxiosError(error) && error.response) {
         this.logger.error(
@@ -414,18 +441,19 @@ export class MercadoPagoService {
 
     if (configData.tokenExpiry && configData.tokenExpiry < oneHourFromNow) {
       this.logger.log(`Token por expirar, renovando para tenant: ${tenantId}`);
-      await this.refreshAccessToken(tenantId);
+      const data: {
+        status: string;
+        message: string;
+        data?: { access_token: string; user_id: string };
+      } = await this.refreshAccessToken(tenantId);
 
-      // Obtener el nuevo token
-      const newConfig = await this.dbService.runInTransaction(
-        { tenantId },
-        async (tx) => {
-          const repo = MpConfigRepo(tx);
-          return repo.getMpConfigStoreByTenantId(tenantId);
-        },
-      );
+      if (!data.data) {
+        throw new InternalServerErrorException(
+          'Error renovando el access token de Mercado Pago.',
+        );
+      }
 
-      return this.decryptToken(newConfig!.accessTokenEnc);
+      return data.data.access_token;
     }
 
     return this.decryptToken(configData.accessTokenEnc);
@@ -520,7 +548,6 @@ export class MercadoPagoService {
       };
 
       const paymentClient = new Payment(clientConfig);
-
       let payment: any | null = null;
       try {
         payment = await paymentClient.get({ id: paymentId });
@@ -568,7 +595,11 @@ export class MercadoPagoService {
     tenantId: string,
     max_installments: number,
     excluded_payment_methods: string[],
-  ): Promise<any> {
+  ): Promise<{
+    max_installments: number;
+    excluded_payment_types: Prisma.JsonValue;
+  }> {
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
     const response = await this.dbService.runInTransaction(
       { tenantId },
       async (tx) => {

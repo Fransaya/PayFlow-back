@@ -117,7 +117,10 @@ export function MpConfigRepo(tx: Prisma.TransactionClient) {
       tenant_id: string,
       max_installments: number,
       excluded_payment_types: string[],
-    ): Promise<any> {
+    ): Promise<{
+      max_installments: number;
+      excluded_payment_types: Prisma.JsonValue;
+    }> {
       try {
         return await tx.mp_config.update({
           where: { tenant_id: tenant_id },

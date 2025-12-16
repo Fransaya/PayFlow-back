@@ -37,7 +37,7 @@ async function bootstrap() {
 
   // Configuración CORS para desarrollo - Acepta cualquier origen
   app.enableCors({
-    origin: true, // Acepta cualquier origen
+    origin: 'http://localhost:5173', // Acepta cualquier origen
     credentials: true, // Permitir envío de cookies/credenciales
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Métodos HTTP permitidos
     allowedHeaders: [

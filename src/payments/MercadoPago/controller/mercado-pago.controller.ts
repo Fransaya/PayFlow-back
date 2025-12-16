@@ -4,11 +4,12 @@ import {
   Put,
   Body,
   Query,
-  Res,
+  Delete,
   UnauthorizedException,
   UseGuards,
   HttpCode,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { CurrentUser } from '@src/common/decorators/extractUser.decorator';
 // Servicio internos de nest
@@ -28,6 +29,7 @@ import { Request, Response } from 'express';
 
 @Controller('mercado-pago')
 export class MercadoPagoController {
+  private readonly logger = new Logger(MercadoPagoController.name);
   private readonly FRONTEND_BASE_URL: string;
 
   constructor(
@@ -74,55 +76,119 @@ export class MercadoPagoController {
 
   /**
    * Endpoint de callback: Recibe la respuesta de Mercado Pago.
-   * NOTA: Este endpoint no lleva Guard porque la petición viene directamente de MP,
-   * PERO debe validar el 'state' para obtener el tenant_id y prevenir ataques.
    */
   @Get('oauth/callback')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
   async handleOAuthCallback(
     @Query('code') code: string,
     @Query('state') state: string,
     @Query('error') error: string,
-    @Res() res: Response,
+    @CurrentUser() user: UserFromJWT,
   ) {
     if (error) {
-      // Manejar el error si el usuario rechaza la autorización
-      return res.redirect(
-        `${this.FRONTEND_BASE_URL}/configuracion/payments?error=mp_denied`,
-      );
+      return {
+        // Manejar el error si el usuario rechaza la autorización
+        data: {
+          url: `${this.FRONTEND_BASE_URL}/dashboard/configuracion/payments?error=mp_denied`,
+        },
+      };
     }
 
     if (!code || !state) {
-      return res.redirect(
-        `${this.FRONTEND_BASE_URL}/configuracion/payments?error=mp_invalid_callback`,
-      );
+      return {
+        data: {
+          url: `${this.FRONTEND_BASE_URL}/dashboard/configuracion/payments?error=mp_invalid_callback`,
+        },
+      };
     }
 
     // 1. Extraer el tenant_id del state (el primer segmento)
     const tenantId = state.split('|')[0];
     if (!tenantId) {
-      return res.redirect(
-        `${this.FRONTEND_BASE_URL}/configuracion/payments?error=mp_state_security_failure`,
-      );
+      return {
+        data: {
+          url: `${this.FRONTEND_BASE_URL}/dashboard/configuracion/payments?error=mp_invalid_state`,
+        },
+      };
     }
 
     try {
-      // 2. Aquí debes establecer el contexto de tenant manualmente para que el saveConfig funcione
-      // Esto es CRÍTICO si el callback no pasa por el Guard de Multi-Tenancy.
-      // Ejemplo: (Llama a tu servicio de Contexto/Guard para simular la sesión)
-      // await this.multiTenantService.setContext(tenantId);
-
-      await this.mercadoPagoService.handleOAuthCallback(code, state);
+      const response: { status: string; message: string } =
+        await this.mercadoPagoService.handleOAuthCallback(
+          code,
+          state,
+          user.tenant_id,
+        );
 
       // 3. Redirigir al panel de administración con éxito
-      return res.redirect(
-        `${this.FRONTEND_BASE_URL}/configuracion/payments?status=mp_success`,
-      );
+      if (response.status == 'success') {
+        return {
+          data: {
+            url: `${this.FRONTEND_BASE_URL}/dashboard/configuracion/payments?status=mp_success`,
+          },
+        };
+      }
     } catch (e) {
       console.error('Error al procesar el callback de MP:', e);
-      return res.redirect(
-        `${this.FRONTEND_BASE_URL}/configuracion/payments?error=mp_token_exchange_failed`,
-      );
+      return {
+        data: {
+          url: `${this.FRONTEND_BASE_URL}/dashboard/configuracion/payments?error=mp_token_exchange_failed`,
+        },
+      };
     }
+  }
+
+  /**
+   * Endpoint para verificar el estado del proceso OAuth.
+   * @returns Estado del proceso OAuth y configuración si está completo
+   */
+  @Get('oauth/status')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  async getOAuthStatus(@CurrentUser() user: UserFromJWT) {
+    const tenantId = user.tenant_id;
+
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant ID no encontrado.');
+    }
+
+    try {
+      const status =
+        await this.mercadoPagoService.getPaymentConfigStatus(tenantId);
+
+      return {
+        success: true,
+        isConnected: status.isConnected,
+        expirationDate: status.expirationDate,
+        message: status.isConnected
+          ? 'Mercado Pago conectado exitosamente'
+          : 'Mercado Pago no está conectado',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error al verificar estado OAuth para tenant ${tenantId}:`,
+        error,
+      );
+      return {
+        success: false,
+        isConnected: false,
+        message: 'Error al verificar el estado de la conexión',
+      };
+    }
+  }
+
+  @Delete('disconnect')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  async disconnectMercadoPago(@CurrentUser() user: UserFromJWT) {
+    const tenantId = user.tenant_id;
+
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant ID no encontrado.');
+    }
+
+    return this.mercadoPagoService.disconnectMercadoPago(tenantId);
   }
 
   @Get('config-internal')
@@ -151,7 +217,6 @@ export class MercadoPagoController {
     if (!tenantId) {
       throw new UnauthorizedException('Tenant ID no encontrado.');
     }
-
     return this.mercadoPagoService.updatePaymentConfigSettings(
       tenantId,
       configData.maxInstallments,
