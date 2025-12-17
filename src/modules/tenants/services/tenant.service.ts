@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 
 import {
   Injectable,
@@ -15,7 +14,6 @@ import {
   businessRepo,
   socialIntegrationRepo,
 } from '@libs/db';
-import { StorageService } from '@src/storage/storage.service';
 
 import { Prisma } from '@prisma/client';
 
@@ -33,10 +31,7 @@ import { encryptToken } from '@src/encryption/services/encryption.service';
 export class TenantService {
   private readonly logger = new Logger(TenantService.name);
 
-  constructor(
-    private readonly dbService: DbService,
-    private readonly storageService: StorageService,
-  ) {}
+  constructor(private readonly dbService: DbService) {}
 
   async getPublicTenantInfo(slug: string) {
     try {
@@ -222,12 +217,6 @@ export class TenantService {
           return repo.getBusinessInfo(tenantId);
         },
       );
-
-      if (business && business.logo_url) {
-        business.logo_url = await this.storageService.getPresignedGetUrl(
-          business.logo_url,
-        );
-      }
 
       return {
         tenant: {

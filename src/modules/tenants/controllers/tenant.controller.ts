@@ -15,7 +15,6 @@ import {
   UseGuards,
   UseFilters,
   Controller,
-  HttpException,
   Delete,
 } from '@nestjs/common';
 import { CurrentUser } from '@src/common/decorators/extractUser.decorator';
@@ -25,7 +24,6 @@ import { HttpExceptionFilter } from '../../../common/filters/http-exception.filt
 import { JwtGuard } from '@src/guards/jwt.guard';
 
 import { TenantService } from '../services/tenant.service';
-import { StorageService } from '@src/storage/storage.service';
 
 import { ApiTags } from '@nestjs/swagger';
 
@@ -39,10 +37,7 @@ import { UpdateVisualConfigDto } from '../dto/UpdateVisualConfig.dto';
 @Controller('tenant')
 @UseFilters(HttpExceptionFilter)
 export class TenantController {
-  constructor(
-    private readonly tenantService: TenantService,
-    private readonly storageService: StorageService,
-  ) {}
+  constructor(private readonly tenantService: TenantService) {}
 
   @Get('info')
   @HttpCode(HttpStatus.OK)
@@ -113,35 +108,6 @@ export class TenantController {
       throw new Error('Tenant ID is required');
     }
     return await this.tenantService.updateVisualConfig(tenantId, body);
-  }
-
-  @Get('logo-upload-url')
-  @UseGuards(JwtGuard)
-  @HttpCode(HttpStatus.OK)
-  @UseFilters(HttpExceptionFilter)
-  async getLogoUploadUrl(
-    @CurrentUser() user: UserFromJWT,
-    @Query('type') type: string,
-  ): Promise<any> {
-    try {
-      const tenantId: string = user.tenant_id;
-      if (!tenantId) {
-        throw new Error('Tenant ID is required');
-      }
-
-      const { url, key } = await this.storageService.getPresignedUrl(
-        tenantId,
-        type,
-        'tenants',
-      );
-      return {
-        uploadUrl: url,
-        imageKey: key,
-        expiresIn: 300,
-      };
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
   }
 
   @Get('visual-config')

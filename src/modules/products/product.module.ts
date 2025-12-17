@@ -5,16 +5,10 @@ import { ProductController as ProductPublicController } from './public/controlle
 import { ProductService as ProductPublicService } from './public/services/product.service';
 import { GoogleTokenService } from '../auth/services/google-token.service';
 import { AuthModule } from '../auth/auth.module';
-import { StorageService } from '@src/storage/storage.service';
 
 @Module({
   imports: [AuthModule],
   controllers: [ProductAdminController, ProductPublicController],
-  providers: [
-    ProductAdminService,
-    ProductPublicService,
-    GoogleTokenService,
-    StorageService,
-  ],
+  providers: [ProductAdminService, ProductPublicService, GoogleTokenService],
 })
 export class ProductModule {}

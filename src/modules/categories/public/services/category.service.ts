@@ -6,14 +6,9 @@ import {
 
 import { DbService, categoryRepo } from '@src/libs/db';
 
-import { StorageService } from '@src/storage/storage.service';
-
 @Injectable()
 export class CategoryService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly storageService: StorageService,
-  ) {}
+  constructor(private readonly dbService: DbService) {}
 
   private readonly logger = new Logger(CategoryService.name + ' - Public');
   /**
@@ -63,12 +58,10 @@ export class CategoryService {
 
       // Generate presigned URLs for category images
       const categories = await Promise.all(
-        categoriesObtained.map(async (category) => {
+        categoriesObtained.map((category) => {
           return {
             ...category,
-            image_url: category.image_key
-              ? await this.storageService.getPresignedGetUrl(category.image_key)
-              : null,
+            image_url: category.image_key,
           };
         }),
       );

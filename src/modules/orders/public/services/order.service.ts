@@ -23,7 +23,6 @@ import { MercadoPagoService } from '@src/payments/MercadoPago/services/mercado-p
 import { TenantService } from '@src/modules/tenants/services/tenant.service';
 import { PaymentService } from '@src/payments/admin/services/payment.service';
 import { NotificationService } from '@src/modules/notifications/admin/services/notification.service';
-import { StorageService } from '@src/storage/storage.service';
 
 // Servicio de configuracion para obtener variables de entorno
 import { ConfigService } from '@nestjs/config';
@@ -40,7 +39,6 @@ export class OrderService {
     private readonly configService: ConfigService,
     private readonly paymentService: PaymentService,
     private readonly notificationService: NotificationService,
-    private readonly storageService: StorageService,
   ) {}
 
   private readonly logger = new Logger(OrderService.name + '-Public');
@@ -54,37 +52,6 @@ export class OrderService {
       },
     );
 
-    // Presignar URLs de imágenes en los items del carrito
-    if (response?.cart_json && typeof response.cart_json === 'object') {
-      const cartJson = response.cart_json as any;
-
-      if (cartJson.items && Array.isArray(cartJson.items)) {
-        const itemsWithSignedUrls = await Promise.all(
-          cartJson.items.map(async (item: any) => {
-            if (item.image_url) {
-              try {
-                const signedUrl = await this.storageService.getPresignedGetUrl(
-                  item.image_url,
-                );
-                return {
-                  ...item,
-                  image_url: signedUrl, // Reemplazar con URL firmada
-                };
-              } catch {
-                this.logger.warn(
-                  `No se pudo firmar URL para imagen: ${item.image_url}`,
-                );
-                return item; // Retornar sin cambios si falla
-              }
-            }
-            return item;
-          }),
-        );
-
-        cartJson.items = itemsWithSignedUrls;
-      }
-    }
-
     return response;
   }
 
@@ -96,36 +63,6 @@ export class OrderService {
         return orderRepo(tx).getOrderDetails(orderId);
       },
     );
-
-    // Presignar URLs de imágenes en los items de la orden
-    if (response?.order_item && Array.isArray(response.order_item)) {
-      const itemsWithSignedUrls = await Promise.all(
-        response.order_item.map(async (item: any) => {
-          if (item.product?.image_url) {
-            try {
-              const signedUrl = await this.storageService.getPresignedGetUrl(
-                item.product.image_url,
-              );
-              return {
-                ...item,
-                product: {
-                  ...item.product,
-                  image_url: signedUrl,
-                },
-              };
-            } catch {
-              this.logger.warn(
-                `No se pudo firmar URL para imagen: ${item.product.image_url}`,
-              );
-              return item;
-            }
-          }
-          return item;
-        }),
-      );
-
-      response.order_item = itemsWithSignedUrls;
-    }
 
     return response;
   }

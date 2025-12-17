@@ -3,7 +3,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DbService, orderRepo, tenantRepo } from '@src/libs/db';
 import { OrdersFilterDto } from '../dto/orderFilter.dto';
 
-import { StorageService } from '@src/storage/storage.service';
 import { NotificationService } from '@src/modules/notifications/public/services/notification.service';
 import {
   WhatsAppServide,
@@ -19,7 +18,6 @@ import { ORDER_STATUS } from '@src/constants/app.contants';
 export class OrderService {
   constructor(
     private readonly dbService: DbService,
-    private readonly storageService: StorageService,
     private readonly notificationService: NotificationService,
     private readonly whatsappService: WhatsAppServide,
   ) {}
@@ -66,33 +64,6 @@ export class OrderService {
         `Order with ID ${orderId} not found for tenant ${tenantId}`,
       );
       return null;
-    }
-
-    // Procesar las URLs de imágenes en paralelo
-    if (orderDetails.order_item?.length) {
-      const itemsWithImages = await Promise.all(
-        orderDetails.order_item.map(async (item) => {
-          // Imagen del producto
-          const productImageUrl = item.product?.image_url
-            ? await this.storageService.getPresignedGetUrl(
-                item.product.image_url,
-              )
-            : null;
-
-          return {
-            ...item,
-            product: {
-              ...item.product,
-              image_url: productImageUrl,
-            },
-          };
-        }),
-      );
-
-      return {
-        ...orderDetails,
-        order_item: itemsWithImages,
-      };
     }
 
     return orderDetails;

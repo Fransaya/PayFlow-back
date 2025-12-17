@@ -11,7 +11,6 @@ import { EmailService } from '@src/messaging/services/email.service';
 import { UserBusinessService } from '../userBusiness/services/userBusiness.service';
 import { TenantService } from '../tenants/services/tenant.service';
 import { UserOwnerService } from '../userOwner/services/userOwner.service';
-import { StorageService } from '@src/storage/storage.service';
 import { WhatsAppServide } from '@src/messaging/services/whatsapp.service';
 
 // Modulo y dependencia de server websocket
@@ -30,7 +29,6 @@ import { WebSocketGatewayPublic } from '@src/websocket/public/WebSocketPublicGat
     UserBusinessService,
     TenantService,
     UserOwnerService,
-    StorageService,
     WhatsAppServide,
     WebSocketGatewayAdmin,
     WebSocketGatewayPublic,

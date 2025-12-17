@@ -7,7 +7,6 @@ import { BusinessHourController as BusinessHourPublicController } from './public
 import { BusinessHourService as BusinessHourPublicService } from './public/services/business-hour.service';
 import { BusinessService as BusinessAdminService } from './admin/services/business.service';
 import { BusinessService as BusinessPublicService } from './public/services/business.service';
-import { StorageService } from '@src/storage/storage.service';
 import { GoogleTokenService } from '../auth/services/google-token.service';
 import { AuthModule } from '../auth/auth.module';
 
@@ -25,7 +24,6 @@ import { AuthModule } from '../auth/auth.module';
     BusinessHourAdminService,
     BusinessHourPublicService,
     GoogleTokenService,
-    StorageService,
   ],
   exports: [BusinessAdminService],
 })

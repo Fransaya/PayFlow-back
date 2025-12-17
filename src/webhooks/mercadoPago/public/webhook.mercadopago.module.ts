@@ -8,7 +8,6 @@ import { DbService } from '@src/libs/db';
 import { OrderService as OrderAdminService } from '@src/modules/orders/admin/services/order.service';
 import { TenantService } from '@src/modules/tenants/services/tenant.service';
 import { PaymentService } from '@src/payments/admin/services/payment.service';
-import { StorageService } from '@src/storage/storage.service';
 import { NotificationModule } from '@src/modules/notifications/notification.module';
 import { WhatsAppServide } from '@src/messaging/services/whatsapp.service';
 
@@ -22,7 +21,6 @@ import { WhatsAppServide } from '@src/messaging/services/whatsapp.service';
     OrderAdminService,
     TenantService,
     PaymentService,
-    StorageService,
     WhatsAppServide,
   ],
 })

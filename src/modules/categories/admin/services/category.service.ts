@@ -6,18 +6,11 @@ import {
 
 import { DbService, categoryRepo } from '@src/libs/db';
 
-import { StorageService } from '@src/storage/storage.service';
-
-import { Category } from '@src/types/category';
-
 @Injectable()
 export class CategoryService {
   private readonly logger = new Logger(CategoryService.name);
 
-  constructor(
-    private readonly dbService: DbService,
-    private readonly storageService: StorageService,
-  ) {}
+  constructor(private readonly dbService: DbService) {}
 
   async getCategoriesByTenant(tenantId: string) {
     try {
@@ -28,19 +21,6 @@ export class CategoryService {
           return repo.getCategoryByTenant(tenantId);
         },
       );
-
-      // Transformar image_url (que es un key) a una URL firmada
-      if (response) {
-        await Promise.all(
-          response.map(async (category: Category) => {
-            if (category.image_key) {
-              category.image_key = await this.storageService.getPresignedGetUrl(
-                category.image_key,
-              );
-            }
-          }),
-        );
-      }
 
       return response;
     } catch (error) {

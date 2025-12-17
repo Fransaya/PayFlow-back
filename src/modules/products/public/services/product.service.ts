@@ -6,14 +6,9 @@ import {
 
 import { DbService, productRepo } from '@src/libs/db';
 
-import { StorageService } from '@src/storage/storage.service';
-
 @Injectable()
 export class ProductService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly storageService: StorageService,
-  ) {}
+  constructor(private readonly dbService: DbService) {}
 
   private readonly logger = new Logger(ProductService.name + '-Public');
 
@@ -49,22 +44,9 @@ export class ProductService {
         },
       );
 
-      // Generar URLs pre-firmadas para las imágenes
-      const productsWithUrls = await Promise.all(
-        products.data.map(async (product) => {
-          if (product.image_url) {
-            const presignedUrl = await this.storageService.getPresignedGetUrl(
-              product.image_url,
-            );
-            return { ...product, image_url: presignedUrl };
-          }
-          return product;
-        }),
-      );
-
       return {
         ...products,
-        data: productsWithUrls,
+        data: products,
       };
     } catch (error: any) {
       this.logger.error(`Error getting products for public: ${error}`);

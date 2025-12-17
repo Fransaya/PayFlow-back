@@ -6,16 +6,11 @@ import {
 
 import { DbService, tenantRepo, businessRepo } from '@src/libs/db';
 
-import { StorageService } from '@src/storage/storage.service';
-
 @Injectable()
 export class BusinessService {
   private readonly logger = new Logger(BusinessService.name + ' - Public');
 
-  constructor(
-    private readonly dbService: DbService,
-    private readonly storageService: StorageService,
-  ) {}
+  constructor(private readonly dbService: DbService) {}
 
   async getBusinessInfo(slug: string) {
     try {
@@ -29,14 +24,6 @@ export class BusinessService {
 
       if (!tenantInfo) {
         throw new Error('Tenant not found');
-      }
-
-      if (tenantInfo) {
-        for (const business of tenantInfo.business) {
-          business.logo_url = business.logo_url
-            ? await this.storageService.getPresignedGetUrl(business.logo_url)
-            : null;
-        }
       }
 
       return {
@@ -69,11 +56,6 @@ export class BusinessService {
         },
       );
 
-      if (response?.logo_url) {
-        response.logo_url = await this.storageService.getPresignedGetUrl(
-          response.logo_url,
-        );
-      }
       return response;
     } catch (error) {
       this.logger.error('Error getting public business info', error);
