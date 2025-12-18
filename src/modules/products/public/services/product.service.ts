@@ -46,7 +46,6 @@ export class ProductService {
 
       return {
         ...products,
-        data: products,
       };
     } catch (error: any) {
       this.logger.error(`Error getting products for public: ${error}`);
