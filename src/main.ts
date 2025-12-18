@@ -37,7 +37,12 @@ async function bootstrap() {
 
   // Configuración CORS para desarrollo - Acepta cualquier origen
   app.enableCors({
-    origin: ['http://localhost:5173', 'http://localhost:3001'], // Acepta cualquier origen
+    origin: [
+      'http://localhost:5173',
+      'http://localhost:3001',
+      'https://admin.pedilo.app',
+      'https://pedilo.app',
+    ], // Acepta cualquier origen
     credentials: true, // Permitir envío de cookies/credenciales
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Métodos HTTP permitidos
     allowedHeaders: [
