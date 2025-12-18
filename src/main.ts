@@ -42,6 +42,7 @@ async function bootstrap() {
       'http://localhost:3001',
       'https://admin.pedilo.app',
       'https://pedilo.app',
+      /\.pedilo\.app$/,
     ], // Acepta cualquier origen
     credentials: true, // Permitir envío de cookies/credenciales
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Métodos HTTP permitidos
@@ -51,7 +52,9 @@ async function bootstrap() {
       'X-Requested-With',
       'x-oauth-token',
       'x-google-token',
-    ], // Headers permitidos
+      'X-Tenant-Id',
+    ],
+    exposedHeaders: ['X-Tenant-Id'],
   });
 
   const port = configServive.get<number>('PORT') || 3000;
