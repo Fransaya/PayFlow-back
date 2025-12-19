@@ -18,10 +18,10 @@ import { DbService, MpConfigRepo } from '@src/libs/db';
 
 import { Prisma } from '@prisma/client';
 
-const MOCK_KMS_KEY = Buffer.from(
-  process.env.KMS_MOCK_KEY_32_BYTES || crypto.randomBytes(32).toString('hex'),
-  'utf-8',
-);
+// const MOCK_KMS_KEY = Buffer.from(
+//   process.env.KMS_MOCK_KEY_32_BYTES || crypto.randomBytes(32).toString('hex'),
+//   'utf-8',
+// );
 
 // Prefijo para las keys de OAuth state en Redis
 const OAUTH_STATE_PREFIX = 'mp:oauth:state:';
@@ -40,6 +40,10 @@ export class MercadoPagoService {
   private readonly CLIENT_SECRET: string | undefined;
   private readonly REDIRECT_URI: string | undefined;
 
+  // Configuración de Criptografía
+  private readonly ALGORITHM = 'aes-256-cbc';
+  private readonly ENCRYPTION_KEY: Buffer;
+
   constructor(
     private readonly configService: ConfigService,
     private readonly dbService: DbService,
@@ -52,21 +56,120 @@ export class MercadoPagoService {
     this.REDIRECT_URI = this.configService.get<string>(
       'MERCADOPAGO_REDIRECT_URI',
     );
+
+    // 2. Inicialización SEGURA de la Key
+    // Obtenemos la key del env como string.
+    const rawKey = this.configService.get<string>('KMS_MOCK_KEY_32_BYTES');
+
+    if (rawKey) {
+      // IMPORTANTE: Convertimos de HEX a Buffer para obtener los 32 bytes reales
+      this.ENCRYPTION_KEY = Buffer.from(rawKey, 'hex');
+    } else {
+      // Fallback para desarrollo local si no hay key
+      this.logger.warn(
+        '⚠️ No se detectó KMS_KEY. Generando una efímera (los tokens previos serán inválidos al reiniciar).',
+      );
+      this.ENCRYPTION_KEY = crypto.randomBytes(32);
+    }
+
+    // Validación defensiva (Evita el crash de "Invalid key length")
+    if (this.ENCRYPTION_KEY.length !== 32) {
+      throw new Error(
+        `FATAL: La clave KMS_MOCK_KEY_32_BYTES debe ser un string HEX de 64 caracteres (32 bytes). Longitud recibida: ${this.ENCRYPTION_KEY.length} bytes.`,
+      );
+    }
   }
 
   /**
    * 💡 Función mock para cifrar un token.
    * Reemplazar con la implementación real de AWS KMS o Vault.
    */
+  // private encryptToken(token: string): string {
+  //   const cipher = crypto.createCipheriv(
+  //     'aes-256-cbc',
+  //     MOCK_KMS_KEY,
+  //     MOCK_KMS_KEY.subarray(0, 16),
+  //   );
+  //   let encrypted = cipher.update(token, 'utf8', 'hex');
+  //   encrypted += cipher.final('hex');
+  //   return encrypted;
+  // }
+
+  // /**
+  //  * Función para descifrar un token.
+  //  */
+  // private decryptToken(encryptedToken: string): string {
+  //   const decipher = crypto.createDecipheriv(
+  //     'aes-256-cbc',
+  //     MOCK_KMS_KEY,
+  //     MOCK_KMS_KEY.subarray(0, 16),
+  //   );
+  //   let decrypted = decipher.update(encryptedToken, 'hex', 'utf8');
+  //   decrypted += decipher.final('utf8');
+  //   return decrypted;
+  // }
+
+  /**
+   * Cifra un token usando AES-256-CBC con IV aleatorio.
+   * Retorna formato "iv:content"
+   */
   private encryptToken(token: string): string {
-    const cipher = crypto.createCipheriv(
-      'aes-256-cbc',
-      MOCK_KMS_KEY,
-      MOCK_KMS_KEY.subarray(0, 16),
-    );
-    let encrypted = cipher.update(token, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return encrypted;
+    try {
+      // 1. Generar IV único para esta operación
+      const iv = crypto.randomBytes(16);
+
+      // 2. Crear cifrador
+      const cipher = crypto.createCipheriv(
+        this.ALGORITHM,
+        this.ENCRYPTION_KEY,
+        iv,
+      );
+
+      // 3. Cifrar
+      let encrypted = cipher.update(token, 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+
+      // 4. Retornar IV + Texto cifrado (necesario para descifrar después)
+      return `${iv.toString('hex')}:${encrypted}`;
+    } catch (error) {
+      this.logger.error('Error crítico al encriptar token', error);
+      throw new Error('Error interno de seguridad al procesar credenciales.');
+    }
+  }
+
+  /**
+   * Descifra un token en formato "iv:content".
+   */
+  private decryptToken(encryptedString: string): string {
+    try {
+      // 1. Separar IV y Contenido
+      const parts = encryptedString.split(':');
+      if (parts.length !== 2) {
+        throw new Error(
+          'El token almacenado no tiene el formato iv:content correcto.',
+        );
+      }
+
+      const iv = Buffer.from(parts[0], 'hex');
+      const encryptedText = parts[1];
+
+      // 2. Crear descifrador
+      const decipher = crypto.createDecipheriv(
+        this.ALGORITHM,
+        this.ENCRYPTION_KEY,
+        iv,
+      );
+
+      // 3. Descifrar
+      let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+
+      return decrypted;
+    } catch (error) {
+      this.logger.error('Error al desencriptar token', error);
+      // Opcional: Retornar null o lanzar error según tu lógica de negocio
+      throw new Error('No se pudieron recuperar las credenciales cifradas.');
+    }
   }
 
   /**
@@ -409,20 +512,6 @@ export class MercadoPagoService {
         'Error de red al renovar el token de MP.',
       );
     }
-  }
-
-  /**
-   * Función para descifrar un token.
-   */
-  private decryptToken(encryptedToken: string): string {
-    const decipher = crypto.createDecipheriv(
-      'aes-256-cbc',
-      MOCK_KMS_KEY,
-      MOCK_KMS_KEY.subarray(0, 16),
-    );
-    let decrypted = decipher.update(encryptedToken, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
   }
 
   /**
